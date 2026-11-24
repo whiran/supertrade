@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MultiChartGrid } from './chart/MultiChartGrid.js';
-import { useMarketStore, type LayoutGridMode } from './store/marketStore.js';
+import { useMarketStore, type LayoutGridMode, THEME_PRESETS } from './store/marketStore.js';
 import { wsClient } from './lib/wsClient.js';
 import type { Timeframe } from '@tv/shared';
 
@@ -13,8 +13,20 @@ import { StrategyTesterPanel } from './panels/StrategyTesterPanel.js';
 import { CalendarNewsPanel } from './panels/CalendarNewsPanel.js';
 import { AlertsPanel } from './panels/AlertsPanel.js';
 import { ReplayToolbar } from './panels/ReplayToolbar.js';
+import { TimeAndSalesPanel } from './panels/TimeAndSalesPanel.js';
+import { CryptoSensePanel } from './panels/CryptoSensePanel.js';
+import { IndicatorModal } from './panels/IndicatorModal.js';
 
 const TIMEFRAMES: Timeframe[] = ['1s', '5s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
+
+const QUICK_SYMBOLS = [
+  { label: 'BTC', symbol: 'BINANCE:BTCUSDT' },
+  { label: 'ETH', symbol: 'BINANCE:ETHUSDT' },
+  { label: 'SOL', symbol: 'BINANCE:SOLUSDT' },
+  { label: 'XRP', symbol: 'BINANCE:XRPUSDT' },
+  { label: 'BNB', symbol: 'BINANCE:BNBUSDT' },
+  { label: 'DOGE', symbol: 'BINANCE:DOGEUSDT' },
+];
 
 const DRAWING_TOOLS = [
   { id: 'cursor', label: '✚', title: 'Crosshair / Pointer' },
@@ -23,6 +35,7 @@ const DRAWING_TOOLS = [
   { id: 'HorizontalLine', label: '—', title: 'Horizontal Line (Alt+H)' },
   { id: 'ParallelChannel', label: '⫽', title: 'Parallel Channel' },
   { id: 'FibRetracement', label: 'φ', title: 'Fib Retracement (Alt+F)' },
+  { id: 'Box', label: '▭', title: 'Rectangle / Zone' },
   { id: 'LongPosition', label: '▲', title: 'Long Position Box' },
   { id: 'ShortPosition', label: '▼', title: 'Short Position Box' },
   { id: 'Brush', label: '✎', title: 'Brush Freehand' },
@@ -39,6 +52,11 @@ export default function App() {
     replayMode,
     activeDrawingTool,
     magnetMode,
+    currentTheme,
+    themeOpacity,
+    aiBotEnabled,
+    aiZonesEnabled,
+    autoSigEnabled,
     setSymbol,
     setTimeframe,
     setLayoutMode,
@@ -46,12 +64,19 @@ export default function App() {
     setReplayMode,
     setActiveDrawingTool,
     setMagnetMode,
+    setTheme,
+    setThemeOpacity,
+    toggleAiBot,
+    toggleAiZones,
+    toggleAutoSig,
     setWsConnected,
   } = useMarketStore();
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [indicatorModalOpen, setIndicatorModalOpen] = useState(false);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
 
   // Wire up connection status
   useEffect(() => {
@@ -133,10 +158,104 @@ export default function App() {
               </button>
             ))}
           </div>
+
+          {/* Quick-Select Symbols */}
+          <div className="flex items-center space-x-0.5 bg-[#131722] p-0.5 rounded border border-[#2a2e39]">
+            {QUICK_SYMBOLS.map((qs) => (
+              <button
+                key={qs.symbol}
+                onClick={() => setSymbol(qs.symbol)}
+                className={`px-2 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                  activeSymbol === qs.symbol
+                    ? 'bg-[#26a69a] text-white'
+                    : 'text-[#787b86] hover:text-[#d1d4dc]'
+                }`}
+              >
+                {qs.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Indicators Button */}
+          <button
+            onClick={() => setIndicatorModalOpen(true)}
+            className="px-2.5 py-1 rounded text-xs font-semibold bg-[#131722] hover:bg-[#2a2e39] text-[#787b86] hover:text-white border border-[#2a2e39] transition-colors"
+          >
+            📊 Indicators
+          </button>
         </div>
 
         {/* Center / Right controls */}
         <div className="flex items-center space-x-2">
+          {/* AI Controls */}
+          <div className="flex items-center space-x-1 bg-[#131722] p-0.5 rounded border border-[#2a2e39]">
+            <button
+              onClick={toggleAiBot}
+              className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                aiBotEnabled ? 'bg-[#26a69a] text-white' : 'text-[#787b86]'
+              }`}
+              title="AI Bot Auto-Analysis"
+            >
+              AI BOT
+            </button>
+            <button
+              onClick={toggleAiZones}
+              className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                aiZonesEnabled ? 'bg-[#2962ff] text-white' : 'text-[#787b86]'
+              }`}
+              title="AI Supply/Demand Zones"
+            >
+              ZONES
+            </button>
+            <button
+              onClick={toggleAutoSig}
+              className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${
+                autoSigEnabled ? 'bg-[#f59e0b] text-black' : 'text-[#787b86]'
+              }`}
+              title="Automatic Buy/Sell Signals"
+            >
+              AUTO-SIG
+            </button>
+          </div>
+
+          {/* Theme BG Picker */}
+          <div className="relative">
+            <button
+              onClick={() => setThemePickerOpen(!themePickerOpen)}
+              className="px-2 py-1 rounded text-[10px] font-bold bg-[#131722] hover:bg-[#2a2e39] text-[#787b86] border border-[#2a2e39] transition-colors"
+              title="Chart Background"
+            >
+              BG
+            </button>
+            {themePickerOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-2xl p-2 z-50 w-48">
+                <div className="text-[10px] text-[#787b86] font-bold uppercase mb-1.5">Theme</div>
+                <div className="grid grid-cols-2 gap-1 mb-2">
+                  {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+                    <button
+                      key={key}
+                      onClick={() => { setTheme(key); setThemePickerOpen(false); }}
+                      className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+                        currentTheme === key ? 'bg-[#2962ff] text-white' : 'bg-[#131722] text-[#787b86] hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-[#787b86] font-bold mb-1">Opacity: {themeOpacity}%</div>
+                <input
+                  type="range"
+                  min={20}
+                  max={100}
+                  value={themeOpacity}
+                  onChange={(e) => setThemeOpacity(Number(e.target.value))}
+                  className="w-full h-1 accent-[#2962ff]"
+                />
+              </div>
+            )}
+          </div>
+
           {/* Bar Replay Toggle */}
           <button
             onClick={() => setReplayMode(!replayMode)}
@@ -216,6 +335,29 @@ export default function App() {
           >
             🧲
           </button>
+
+          <div className="w-6 border-b border-[#2a2e39] my-1" />
+
+          {/* Undo / Clear Drawing */}
+          <button
+            title="Undo Last Drawing"
+            onClick={() => {
+              // Dispatch undo event for DrawingController to handle
+              window.dispatchEvent(new CustomEvent('drawing:undo'));
+            }}
+            className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc] transition-colors"
+          >
+            ↩
+          </button>
+          <button
+            title="Clear All Drawings"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('drawing:clear'));
+            }}
+            className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold text-[#787b86] hover:bg-[#ef535033] hover:text-[#ef5350] transition-colors"
+          >
+            🗑
+          </button>
         </aside>
 
         {/* Center Canvas / Multi-Chart Grid */}
@@ -236,6 +378,8 @@ export default function App() {
               { id: 'strategy', label: 'Strategy' },
               { id: 'calendar', label: 'News' },
               { id: 'alerts', label: 'Alerts' },
+              { id: 'trades', label: 'T&S' },
+              { id: 'cryptosense', label: 'FUND' },
             ].map((p) => (
               <button
                 key={p.id}
@@ -260,6 +404,8 @@ export default function App() {
             {activePanel === 'strategy' && <StrategyTesterPanel />}
             {activePanel === 'calendar' && <CalendarNewsPanel />}
             {activePanel === 'alerts' && <AlertsPanel />}
+            {activePanel === 'trades' && <TimeAndSalesPanel />}
+            {activePanel === 'cryptosense' && <CryptoSensePanel />}
           </div>
         </aside>
       </div>
@@ -318,6 +464,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Indicator Catalog Modal */}
+      <IndicatorModal isOpen={indicatorModalOpen} onClose={() => setIndicatorModalOpen(false)} />
     </div>
   );
 }

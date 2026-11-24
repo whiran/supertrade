@@ -53,10 +53,10 @@ export const ReplayToolbar: React.FC = () => {
         onChange={(e) => setSpeed(Number(e.target.value))}
         className="bg-[#131722] border border-[#2a2e39] rounded px-2 py-1 text-white font-mono outline-none"
       >
-        <option value={1}>1x</option>
-        <option value={2}>2x</option>
-        <option value={5}>5x</option>
-        <option value={10}>10x</option>
+        <option value={1}>1x (1s/bar)</option>
+        <option value={2}>2x (0.5s/bar)</option>
+        <option value={5}>5x (0.2s/bar)</option>
+        <option value={10}>10x (0.1s/bar)</option>
       </select>
 
       <button
