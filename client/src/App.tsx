@@ -57,6 +57,42 @@ const DRAWING_TOOLS = [
   { id: 'Text', label: 'T', title: 'Text Annotation' },
 ];
 
+function normalizeInputSymbol(raw: string): string {
+  if (!raw) return 'BINANCE:BTCUSDT';
+  const s = raw.trim().toUpperCase();
+  if (s.includes(':')) return s;
+
+  // Commodities & Metals
+  if (/^(XAU|XAG|XPT|XPD|OIL|USOIL|BCO|CRUDE)/.test(s)) {
+    return `COMMODITY:${s.replace(/[/_]/g, '')}`;
+  }
+  // Major Indices
+  if (/^(SPX|DJI|IXIC|NDX|RUT|SP500|US30|NAS100)/.test(s)) {
+    return `INDEX:${s.replace(/[/_]/g, '')}`;
+  }
+  // Forex: contains / or _ or 6-letter currency codes
+  const clean = s.replace(/[/_]/g, '');
+  if (
+    s.includes('/') ||
+    s.includes('_') ||
+    (clean.length === 6 &&
+      /^(EUR|GBP|USD|AUD|NZD|CAD|CHF|JPY|TRY|INR|ZAR|MXN|SEK|NOK|SGD|HKD|CNY|CNH|PLN)/.test(clean))
+  ) {
+    const base = clean.slice(0, 3);
+    const quote = clean.slice(3, 6);
+    return `OANDA:${base}_${quote}`;
+  }
+  // Crypto: ends with USDT, USDC, BUSD, BTC, ETH
+  if (/(USDT|USDC|BUSD|BTC|ETH|SOL|BNB)$/.test(clean)) {
+    return `BINANCE:${clean}`;
+  }
+  // US Equities: 1-5 letters ticker
+  if (/^[A-Z]{1,5}$/.test(clean)) {
+    return `ALPACA:${clean}`;
+  }
+  return `OANDA:${s.replace('/', '_')}`;
+}
+
 export default function App() {
   const {
     activeSymbol,
@@ -92,6 +128,19 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [indicatorModalOpen, setIndicatorModalOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [inlineSymbol, setInlineSymbol] = useState(activeSymbol);
+
+  // Sync inline symbol with activeSymbol
+  useEffect(() => {
+    setInlineSymbol(activeSymbol);
+  }, [activeSymbol]);
+
+  const handleInlineSymbolSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inlineSymbol.trim()) return;
+    const normalized = normalizeInputSymbol(inlineSymbol);
+    setSymbol(normalized);
+  };
 
   // Wire up connection status
   useEffect(() => {
@@ -148,22 +197,48 @@ export default function App() {
             <span>PRECISION TV</span>
           </div>
 
-          {/* Quick Symbol Button */}
-          <button
-            onClick={() => setSearchModalOpen(true)}
-            className="flex items-center space-x-1.5 bg-[#131722] hover:bg-[#2a2e39] border border-[#2a2e39] px-2.5 py-1 rounded text-xs font-bold text-white transition-colors"
+          {/* Direct Typeable Symbol Box matching terminal aesthetics */}
+          <form
+            onSubmit={handleInlineSymbolSubmit}
+            className="flex items-center space-x-1.5 bg-[#131722] border border-[#2a2e39] rounded px-2 py-0.5"
           >
-            <span>🔍</span>
-            <span>{activeSymbol}</span>
-          </button>
+            <span className="text-[10px] font-extrabold text-[#787b86] uppercase tracking-wider">
+              SYMBOL:
+            </span>
+            <input
+              type="text"
+              value={inlineSymbol}
+              onChange={(e) => setInlineSymbol(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleInlineSymbolSubmit();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              placeholder="e.g. EURUSD, ETHUSDT"
+              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-2 py-0.5 rounded outline-none w-32 uppercase text-center"
+              title="Type any currency pair or symbol and press Enter to switch"
+            />
+            <button
+              type="button"
+              onClick={() => setSearchModalOpen(true)}
+              className="text-[#787b86] hover:text-white px-1 text-xs font-bold transition-colors"
+              title="Open Symbol Search & Catalog"
+            >
+              🔍
+            </button>
+          </form>
 
-          {/* Timeframe Bar */}
+          {/* Timeframe Bar with PERIOD label */}
           <div className="flex items-center space-x-0.5 bg-[#131722] p-0.5 rounded border border-[#2a2e39]">
+            <span className="text-[9px] font-extrabold text-[#787b86] px-1 uppercase tracking-wider">
+              PERIOD:
+            </span>
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-[11px] font-semibold rounded transition-colors ${
                   activeTimeframe === tf
                     ? 'bg-[#2962ff] text-white'
                     : 'text-[#787b86] hover:text-[#d1d4dc]'
@@ -516,7 +591,18 @@ export default function App() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search symbol (e.g. BTC, ETH, EUR, AAPL, SPY)..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (searchResults.length > 0) {
+                      setSymbol(searchResults[0].symbol);
+                    } else if (searchQuery.trim()) {
+                      setSymbol(normalizeInputSymbol(searchQuery));
+                    }
+                    setSearchModalOpen(false);
+                    setSearchQuery('');
+                  }
+                }}
+                placeholder="Search symbol (e.g. BTC, ETH, EUR, AAPL, SPY, EUR/TRY)..."
                 className="flex-1 bg-transparent text-white text-sm outline-none font-semibold"
               />
               <span className="text-[10px] text-[#787b86] font-mono bg-[#131722] px-1.5 py-0.5 rounded">
@@ -525,9 +611,36 @@ export default function App() {
             </div>
 
             <div className="max-h-72 overflow-y-auto divide-y divide-[#2a2e39]">
+              {searchQuery.trim() && (
+                <div
+                  onClick={() => {
+                    const normalized = normalizeInputSymbol(searchQuery);
+                    setSymbol(normalized);
+                    setSearchModalOpen(false);
+                    setSearchQuery('');
+                  }}
+                  className="p-2.5 bg-[#2962ff18] hover:bg-[#2962ff33] border-b border-[#2962ff44] cursor-pointer flex justify-between items-center transition-colors text-xs text-white"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[#38bdf8] font-bold text-sm">⚡</span>
+                    <div>
+                      <div className="font-bold text-white">
+                        Open Custom Symbol: <span className="text-[#38bdf8] font-extrabold">{searchQuery.toUpperCase()}</span>
+                      </div>
+                      <div className="text-[10px] text-[#787b86]">
+                        Directly loads and streams any currency pair, stock, or crypto
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#2962ff] text-white uppercase tracking-wider">
+                    LOAD
+                  </span>
+                </div>
+              )}
+
               {searchResults.length === 0 ? (
                 <div className="text-center text-[#787b86] py-6 text-xs">
-                  {searchQuery ? 'No matching symbols found' : 'Type to search market instruments'}
+                  {searchQuery ? 'Press Enter to open custom symbol' : 'Type to search market instruments'}
                 </div>
               ) : (
                 searchResults.map((item, idx) => (

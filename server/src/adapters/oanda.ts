@@ -39,6 +39,30 @@ const FOREX_BASE_PRICES: Record<string, number> = {
   NAS100_USD: 19280.0,
 };
 
+// Benchmark USD rates for dynamic cross-currency pricing of arbitrary pairs
+const USD_RATES: Record<string, number> = {
+  EUR: 1.0525,
+  GBP: 1.258,
+  AUD: 0.6515,
+  NZD: 0.584,
+  USD: 1.0,
+  CAD: 1 / 1.401,
+  CHF: 1 / 0.887,
+  JPY: 1 / 154.6,
+  TRY: 1 / 35.2,
+  INR: 1 / 84.5,
+  ZAR: 1 / 18.2,
+  MXN: 1 / 20.4,
+  SGD: 1 / 1.35,
+  HKD: 1 / 7.78,
+  SEK: 1 / 11.0,
+  NOK: 1 / 11.1,
+  CNH: 1 / 7.25,
+  CNY: 1 / 7.24,
+  BRL: 1 / 5.8,
+  PLN: 1 / 4.12,
+};
+
 function normalizeSymbol(symbol: string): string {
   return symbol.replace('OANDA:', '').replace('/', '_').toUpperCase();
 }
@@ -53,11 +77,40 @@ function getPrecision(symbol: string): number {
     symbol.includes('BCO') ||
     symbol.includes('SPX') ||
     symbol.includes('US30') ||
-    symbol.includes('NAS100')
+    symbol.includes('NAS100') ||
+    symbol.includes('INR') ||
+    symbol.includes('TRY') ||
+    symbol.includes('ZAR') ||
+    symbol.includes('MXN') ||
+    symbol.includes('SEK') ||
+    symbol.includes('NOK')
   ) {
     return 2;
   }
   return 5;
+}
+
+function getDynamicBasePrice(instrument: string): number {
+  if (FOREX_BASE_PRICES[instrument]) return FOREX_BASE_PRICES[instrument];
+
+  // Try parsing base and quote currencies
+  const parts = instrument.replace(/[/_]/g, ' ').trim().split(/\s+/);
+  let base = '';
+  let quote = '';
+  if (parts.length >= 2) {
+    base = parts[0];
+    quote = parts[1];
+  } else if (instrument.length === 6) {
+    base = instrument.slice(0, 3);
+    quote = instrument.slice(3, 6);
+  }
+
+  if (base && quote && USD_RATES[base] && USD_RATES[quote]) {
+    const rawRate = USD_RATES[base] / USD_RATES[quote];
+    return +rawRate.toFixed(getPrecision(instrument));
+  }
+
+  return 1.1;
 }
 
 function generateForexHistory(
@@ -167,7 +220,7 @@ export class OandaAdapter implements ProviderAdapter {
     }
 
     // Fallback: Realistic synthetic forex bars
-    const basePrice = FOREX_BASE_PRICES[instrument] || 1.1;
+    const basePrice = getDynamicBasePrice(instrument);
     const bars = generateForexHistory(instrument, tf, limit, basePrice);
     insertCandleBatch(bars, symbol, tf);
     if (bars.length > 0) {
@@ -246,7 +299,7 @@ export class OandaAdapter implements ProviderAdapter {
 
     // Fallback: Real-time forex tick simulator for instant zero-key operation
     const decimals = getPrecision(instrument);
-    const basePrice = FOREX_BASE_PRICES[instrument] || 1.1;
+    const basePrice = getDynamicBasePrice(instrument);
     let livePrice = this.lastPrices.get(instrument) || basePrice;
 
     // Pip size: JPY pairs 0.01, others 0.0001

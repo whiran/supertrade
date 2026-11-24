@@ -51,7 +51,45 @@ const adapters = [binance, bybit, alpaca, oanda, commodities, indices];
 // Initialize alert runner with DB rules
 alertRunner.loadAlerts(getAlerts());
 
-function getAdapterForSymbol(symbol: string) {
+// Canonical symbol normalization for arbitrary typed symbols
+export function normalizeCanonicalSymbol(raw: string): string {
+  if (!raw) return 'BINANCE:BTCUSDT';
+  const s = raw.trim().toUpperCase();
+  if (s.includes(':')) return s;
+
+  // Commodities & Precious metals
+  if (/^(XAU|XAG|XPT|XPD|OIL|USOIL|BCO|CRUDE)/.test(s)) {
+    return `COMMODITY:${s.replace(/[/_]/g, '')}`;
+  }
+  // Major Indices
+  if (/^(SPX|DJI|IXIC|NDX|RUT|SP500|US30|NAS100)/.test(s)) {
+    return `INDEX:${s.replace(/[/_]/g, '')}`;
+  }
+  // Forex: contains / or _ or 6-letter currency codes
+  const clean = s.replace(/[/_]/g, '');
+  if (
+    s.includes('/') ||
+    s.includes('_') ||
+    (clean.length === 6 &&
+      /^(EUR|GBP|USD|AUD|NZD|CAD|CHF|JPY|TRY|INR|ZAR|MXN|SEK|NOK|SGD|HKD|CNY|CNH|PLN)/.test(clean))
+  ) {
+    const base = clean.slice(0, 3);
+    const quote = clean.slice(3, 6);
+    return `OANDA:${base}_${quote}`;
+  }
+  // Crypto: standard quote currency suffixes
+  if (/(USDT|USDC|BUSD|BTC|ETH|SOL|BNB)$/.test(clean)) {
+    return `BINANCE:${clean}`;
+  }
+  // US Equities: 1-5 letters ticker
+  if (/^[A-Z]{1,5}$/.test(clean)) {
+    return `ALPACA:${clean}`;
+  }
+  return `BINANCE:${clean}`;
+}
+
+function getAdapterForSymbol(rawSymbol: string) {
+  const symbol = normalizeCanonicalSymbol(rawSymbol);
   if (symbol.startsWith('BINANCE:')) return binance;
   if (symbol.startsWith('BYBIT:')) return bybit;
   if (symbol.startsWith('ALPACA:')) return alpaca;
@@ -151,9 +189,10 @@ app.get('/api/health', async () => ({
 }));
 
 app.get('/api/history', async (req) => {
-  const { symbol, tf, limit = '500', endSec } = req.query as any;
-  if (!symbol || !tf) return { error: 'symbol and tf required' };
+  const { symbol: rawSymbol, tf, limit = '500', endSec } = req.query as any;
+  if (!rawSymbol || !tf) return { error: 'symbol and tf required' };
 
+  const symbol = normalizeCanonicalSymbol(rawSymbol);
   const adapter = getAdapterForSymbol(symbol);
   const bars = await adapter.fetchHistory(
     symbol,
