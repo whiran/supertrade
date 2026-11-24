@@ -3,6 +3,10 @@ import {
   createChart,
   CandlestickSeries,
   HistogramSeries,
+  LineSeries,
+  AreaSeries,
+  BarSeries,
+  BaselineSeries,
   CrosshairMode,
   type IChartApi,
   type ISeriesApi,
@@ -11,7 +15,7 @@ import type { CanonicalBar, LiveQuote, Timeframe, FeedQuality } from '@tv/shared
 import { wsClient } from '../lib/wsClient.js';
 import { DrawingController } from './DrawingController.js';
 import { IndicatorEngine } from './IndicatorEngine.js';
-import { useMarketStore } from '../store/marketStore.js';
+import { useMarketStore, type ChartAggregationType } from '../store/marketStore.js';
 
 interface Props {
   symbol: string;
@@ -60,6 +64,153 @@ const TF_SECONDS: Record<Timeframe, number> = {
   '1w': 604800,
 };
 
+function computeHeikinAshi(bars: CanonicalBar[]): CanonicalBar[] {
+  if (!bars || bars.length === 0) return [];
+  const haBars: CanonicalBar[] = [];
+  let prevOpen = bars[0].open;
+  let prevClose = bars[0].close;
+
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+    const haClose = (b.open + b.high + b.low + b.close) / 4;
+    const haOpen = i === 0 ? (b.open + b.close) / 2 : (prevOpen + prevClose) / 2;
+    const haHigh = Math.max(b.high, haOpen, haClose);
+    const haLow = Math.min(b.low, haOpen, haClose);
+
+    haBars.push({
+      time: b.time,
+      open: +haOpen.toFixed(4),
+      high: +haHigh.toFixed(4),
+      low: +haLow.toFixed(4),
+      close: +haClose.toFixed(4),
+      volume: b.volume,
+      isFinal: b.isFinal,
+    });
+
+    prevOpen = haOpen;
+    prevClose = haClose;
+  }
+  return haBars;
+}
+
+function createMainSeries(chart: IChartApi, type: ChartAggregationType): ISeriesApi<any> {
+  switch (type) {
+    case 'hollow':
+      return chart.addSeries(CandlestickSeries, {
+        upColor: '#131722',
+        downColor: '#ef5350',
+        borderVisible: true,
+        borderUpColor: '#26a69a',
+        borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+      });
+    case 'bars':
+      return chart.addSeries(BarSeries, {
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+      });
+    case 'line':
+      return chart.addSeries(LineSeries, {
+        color: '#2962ff',
+        lineWidth: 2,
+        crosshairMarkerVisible: true,
+      });
+    case 'area':
+      return chart.addSeries(AreaSeries, {
+        lineColor: '#2962ff',
+        topColor: '#2962ff55',
+        bottomColor: '#2962ff00',
+        lineWidth: 2,
+      });
+    case 'baseline':
+      return chart.addSeries(BaselineSeries, {
+        topLineColor: '#26a69a',
+        bottomLineColor: '#ef5350',
+        topFillColor1: '#26a69a33',
+        bottomFillColor1: '#ef535033',
+        lineWidth: 2,
+      });
+    case 'heikin_ashi':
+    case 'candles':
+    default:
+      return chart.addSeries(CandlestickSeries, {
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderVisible: false,
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
+      });
+  }
+}
+
+function formatBarsForSeries(bars: CanonicalBar[], type: ChartAggregationType): any[] {
+  if (type === 'heikin_ashi') {
+    const haBars = computeHeikinAshi(bars);
+    return haBars.map((b) => ({
+      time: b.time as any,
+      open: b.open,
+      high: b.high,
+      low: b.low,
+      close: b.close,
+    }));
+  }
+  if (type === 'line' || type === 'area' || type === 'baseline') {
+    return bars.map((b) => ({
+      time: b.time as any,
+      value: b.close,
+    }));
+  }
+  return bars.map((b) => ({
+    time: b.time as any,
+    open: b.open,
+    high: b.high,
+    low: b.low,
+    close: b.close,
+  }));
+}
+
+function updateSeriesWithBar(
+  series: ISeriesApi<any>,
+  bar: CanonicalBar,
+  type: ChartAggregationType,
+  allBars: CanonicalBar[]
+): void {
+  if (type === 'heikin_ashi') {
+    const len = allBars.length;
+    const prevBar = len > 1 ? allBars[len - 2] : null;
+    const prevClose = prevBar ? (prevBar.open + prevBar.high + prevBar.low + prevBar.close) / 4 : bar.open;
+    const prevOpen = prevBar ? (prevBar.open + prevBar.close) / 2 : bar.open;
+    const haOpen = (prevOpen + prevClose) / 2;
+    const haClose = (bar.open + bar.high + bar.low + bar.close) / 4;
+    const haHigh = Math.max(bar.high, haOpen, haClose);
+    const haLow = Math.min(bar.low, haOpen, haClose);
+
+    series.update({
+      time: bar.time as any,
+      open: +haOpen.toFixed(4),
+      high: +haHigh.toFixed(4),
+      low: +haLow.toFixed(4),
+      close: +haClose.toFixed(4),
+    });
+    return;
+  }
+  if (type === 'line' || type === 'area' || type === 'baseline') {
+    series.update({
+      time: bar.time as any,
+      value: bar.close,
+    });
+    return;
+  }
+  series.update({
+    time: bar.time as any,
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+  });
+}
+
 export const ChartCanvas: React.FC<Props> = ({
   symbol,
   timeframe,
@@ -71,14 +222,14 @@ export const ChartCanvas: React.FC<Props> = ({
   const badgeRef = useRef<HTMLDivElement>(null);
 
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const barsRef = useRef<CanonicalBar[]>([]);
 
   const drawingControllerRef = useRef<DrawingController | null>(null);
   const indicatorEngineRef = useRef<IndicatorEngine | null>(null);
 
-  const { activeDrawingTool, magnetMode } = useMarketStore();
+  const { activeDrawingTool, magnetMode, chartAggregation } = useMarketStore();
 
   // Zero-react-render DOM legend updater
   const updateLegend = useCallback(
@@ -139,15 +290,9 @@ export const ChartCanvas: React.FC<Props> = ({
     });
     chartRef.current = chart;
 
-    // Main Candlestick Series - REQUIRED v5 API
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#26a69a',
-      downColor: '#ef5350',
-      borderVisible: false,
-      wickUpColor: '#26a69a',
-      wickDownColor: '#ef5350',
-    });
-    candleSeriesRef.current = candleSeries;
+    // Main Series according to active aggregation (Candles, Heikin-Ashi, Hollow, Bars, Line, Area, Baseline)
+    const mainSeries = createMainSeries(chart, chartAggregation);
+    mainSeriesRef.current = mainSeries;
 
     // Volume Histogram Series
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -160,7 +305,7 @@ export const ChartCanvas: React.FC<Props> = ({
     volumeSeriesRef.current = volumeSeries;
 
     // Setup Drawing & Indicator Controllers
-    const drawingCtrl = new DrawingController(chart, candleSeries, barsRef, magnetMode);
+    const drawingCtrl = new DrawingController(chart, mainSeries as any, barsRef, magnetMode);
     drawingControllerRef.current = drawingCtrl;
     drawingCtrl.loadFromServer(symbol);
 
@@ -182,14 +327,19 @@ export const ChartCanvas: React.FC<Props> = ({
         }
         return;
       }
-      const data = param.seriesData.get(candleSeries) as any;
+      const series = mainSeriesRef.current || mainSeries;
+      const data = param.seriesData.get(series) as any;
       if (data) {
+        const open = data.open ?? data.value ?? 0;
+        const high = data.high ?? data.value ?? 0;
+        const low = data.low ?? data.value ?? 0;
+        const close = data.close ?? data.value ?? 0;
         updateLegend({
           time: Number(param.time),
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
+          open,
+          high,
+          low,
+          close,
           volume: 0,
           isFinal: true,
         });
@@ -206,15 +356,7 @@ export const ChartCanvas: React.FC<Props> = ({
         const { bars } = (await res.json()) as { bars: CanonicalBar[] };
         if (bars && bars.length > 0) {
           barsRef.current = bars;
-          candleSeries.setData(
-            bars.map((b) => ({
-              time: b.time as any,
-              open: b.open,
-              high: b.high,
-              low: b.low,
-              close: b.close,
-            }))
-          );
+          mainSeries.setData(formatBarsForSeries(bars, chartAggregation));
           volumeSeries.setData(
             bars.map((b) => ({
               time: b.time as any,
@@ -256,13 +398,7 @@ export const ChartCanvas: React.FC<Props> = ({
               volume: 0,
               isFinal: true,
             };
-            candleSeries.update({
-              time: bridgeBar.time as any,
-              open: bridgeBar.open,
-              high: bridgeBar.high,
-              low: bridgeBar.low,
-              close: bridgeBar.close,
-            });
+            updateSeriesWithBar(mainSeriesRef.current || mainSeries, bridgeBar, chartAggregation, barsRef.current);
             volumeSeries.update({
               time: bridgeBar.time as any,
               value: 0,
@@ -272,13 +408,7 @@ export const ChartCanvas: React.FC<Props> = ({
           }
         }
 
-        candleSeries.update({
-          time: bar.time as any,
-          open: bar.open,
-          high: bar.high,
-          low: bar.low,
-          close: bar.close,
-        });
+        updateSeriesWithBar(mainSeriesRef.current || mainSeries, bar, chartAggregation, barsRef.current);
         volumeSeries.update({
           time: bar.time as any,
           value: bar.volume,
@@ -325,8 +455,32 @@ export const ChartCanvas: React.FC<Props> = ({
       unsubQuote();
       chart.remove();
       chartRef.current = null;
+      mainSeriesRef.current = null;
     };
   }, [symbol, timeframe, updateLegend, onBarUpdate, magnetMode]);
+
+  // Dynamic Chart Aggregation / Style switcher without resetting chart layout
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !mainSeriesRef.current) return;
+
+    try {
+      chart.removeSeries(mainSeriesRef.current);
+    } catch {
+      // ignore
+    }
+
+    const newSeries = createMainSeries(chart, chartAggregation);
+    mainSeriesRef.current = newSeries;
+
+    if (barsRef.current.length > 0) {
+      newSeries.setData(formatBarsForSeries(barsRef.current, chartAggregation));
+    }
+
+    if (drawingControllerRef.current) {
+      drawingControllerRef.current.setSeries(newSeries);
+    }
+  }, [chartAggregation]);
 
   // Sync active tool changes to drawing controller
   useEffect(() => {

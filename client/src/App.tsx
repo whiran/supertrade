@@ -108,8 +108,10 @@ export default function App() {
     aiBotEnabled,
     aiZonesEnabled,
     autoSigEnabled,
+    chartAggregation,
     setSymbol,
     setTimeframe,
+    setChartAggregation,
     setLayoutMode,
     setActivePanel,
     setReplayMode,
@@ -130,7 +132,6 @@ export default function App() {
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [inlineSymbol, setInlineSymbol] = useState(activeSymbol);
   const [tickSize, setTickSize] = useState('1');
-  const [aggregationMode, setAggregationMode] = useState('candles');
 
   const handleAutoScale = () => {
     window.dispatchEvent(new CustomEvent('tv:auto-scale'));
@@ -265,16 +266,17 @@ export default function App() {
           {/* AGGREGATION */}
           <div className="flex items-center bg-[#131722] border border-[#2a2e39] rounded px-1 py-0.5">
             <select
-              value={aggregationMode}
-              onChange={(e) => setAggregationMode(e.target.value)}
+              value={chartAggregation}
+              onChange={(e) => setChartAggregation(e.target.value as any)}
               className="bg-[#1e222d] border border-[#2a2e39] text-[#00e5ff] text-xs font-extrabold px-1.5 py-0.5 rounded outline-none cursor-pointer"
             >
-              <option value="candles">-- AGGREGATION --</option>
+              <option value="candles">-- AGGREGATION: CANDLES --</option>
               <option value="heikin_ashi">Heikin-Ashi</option>
               <option value="hollow">Hollow Candles</option>
+              <option value="bars">Bars (OHLC)</option>
               <option value="line">Line</option>
               <option value="area">Area</option>
-              <option value="tick_1">1-Tick</option>
+              <option value="baseline">Baseline</option>
             </select>
           </div>
 

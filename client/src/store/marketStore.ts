@@ -3,6 +3,15 @@ import type { LiveQuote, Timeframe } from '@tv/shared';
 
 export type LayoutGridMode = '1x1' | '1x2' | '2x1' | '2x2' | '3x2' | '3x3' | '4x4';
 
+export type ChartAggregationType =
+  | 'candles'
+  | 'heikin_ashi'
+  | 'hollow'
+  | 'bars'
+  | 'line'
+  | 'area'
+  | 'baseline';
+
 export const THEME_PRESETS: Record<string, { label: string; bg: string; card: string; border: string }> = {
   Slate: { label: 'Slate', bg: '#131722', card: '#1e222d', border: '#2a2e39' },
   OLED: { label: 'OLED Black', bg: '#000000', card: '#111111', border: '#222222' },
@@ -53,9 +62,13 @@ interface MarketState {
   // Active indicator IDs
   activeIndicators: string[];
 
+  // Chart Aggregation / Style mode (candles, heikin_ashi, hollow, bars, line, area, baseline)
+  chartAggregation: ChartAggregationType;
+
   // Actions
   setSymbol: (symbol: string) => void;
   setTimeframe: (tf: Timeframe) => void;
+  setChartAggregation: (agg: ChartAggregationType) => void;
   setLayoutMode: (mode: LayoutGridMode) => void;
   setSyncCrosshairs: (val: boolean) => void;
   setSyncSymbol: (val: boolean) => void;
@@ -98,9 +111,11 @@ export const useMarketStore = create<MarketState>((set) => ({
   autoSigEnabled: false,
 
   activeIndicators: ['VOL', 'CVD', 'S.TREND'],
+  chartAggregation: 'candles',
 
   setSymbol: (symbol) => set({ activeSymbol: symbol }),
   setTimeframe: (tf) => set({ activeTimeframe: tf }),
+  setChartAggregation: (chartAggregation) => set({ chartAggregation }),
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   setSyncCrosshairs: (syncCrosshairs) => set({ syncCrosshairs }),
   setSyncSymbol: (syncSymbol) => set({ syncSymbol }),

@@ -30,6 +30,16 @@ export class DrawingController {
     this.currentSymbol = symbol;
   }
 
+  setSeries(series: any): void {
+    if (this.manager && typeof this.manager.setSeries === 'function') {
+      try {
+        this.manager.setSeries(series);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   setTool(tool: string | null): void {
     if (!this.manager) return;
     try {
