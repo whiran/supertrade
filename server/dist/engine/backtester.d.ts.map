@@ -1,0 +1,1 @@
+{"version":3,"file":"backtester.d.ts","sourceRoot":"","sources":["../../src/engine/backtester.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,cAAc,EAAE,cAAc,EAA4B,MAAM,YAAY,CAAC;AA0C3F,qBAAa,UAAU;IACrB,GAAG,CAAC,MAAM,EAAE,cAAc,GAAG,cAAc;CAmJ5C;AAED,eAAO,MAAM,UAAU,YAAmB,CAAC"}

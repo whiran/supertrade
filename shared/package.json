@@ -1,0 +1,17 @@
+{
+  "name": "@tv/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/types.js",
+  "types": "./dist/types.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js",
+      "default": "./types.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  }
+}
