@@ -23,6 +23,8 @@ import { BinanceAdapter } from './adapters/binance.js';
 import { BybitAdapter } from './adapters/bybit.js';
 import { AlpacaAdapter } from './adapters/alpaca.js';
 import { OandaAdapter } from './adapters/oanda.js';
+import { CommoditiesAdapter } from './adapters/commodities.js';
+import { IndicesAdapter } from './adapters/indices.js';
 import { searchSymbols, getCompanyNews } from './adapters/finnhub.js';
 import { getForexCalendar } from './adapters/forexfactory.js';
 
@@ -41,8 +43,10 @@ const binance = new BinanceAdapter();
 const bybit = new BybitAdapter();
 const alpaca = new AlpacaAdapter();
 const oanda = new OandaAdapter();
+const commodities = new CommoditiesAdapter();
+const indices = new IndicesAdapter();
 
-const adapters = [binance, bybit, alpaca, oanda];
+const adapters = [binance, bybit, alpaca, oanda, commodities, indices];
 
 // Initialize alert runner with DB rules
 alertRunner.loadAlerts(getAlerts());
@@ -52,6 +56,8 @@ function getAdapterForSymbol(symbol: string) {
   if (symbol.startsWith('BYBIT:')) return bybit;
   if (symbol.startsWith('ALPACA:')) return alpaca;
   if (symbol.startsWith('OANDA:')) return oanda;
+  if (symbol.startsWith('COMMODITY:')) return commodities;
+  if (symbol.startsWith('INDEX:')) return indices;
   return binance;
 }
 
@@ -162,14 +168,16 @@ app.get('/api/search', async (req) => {
   const { q = '' } = req.query as any;
   if (!q) return { results: [] };
   const finnhubResults = await searchSymbols(q);
-  // Default multi-asset search items (Crypto, US Equities, Forex)
+  // Default multi-asset search items (Crypto, US Equities, Forex, Commodities, Indices)
   const defaultSymbols = [
+    // Crypto
     { symbol: 'BINANCE:BTCUSDT', description: 'Bitcoin / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:ETHUSDT', description: 'Ethereum / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:SOLUSDT', description: 'Solana / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:XRPUSDT', description: 'Ripple / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:BNBUSDT', description: 'BNB / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:DOGEUSDT', description: 'Dogecoin / Tether US', type: 'crypto' },
+    // Equities
     { symbol: 'ALPACA:SPY', description: 'SPDR S&P 500 ETF Trust', type: 'equity' },
     { symbol: 'ALPACA:AAPL', description: 'Apple Inc.', type: 'equity' },
     { symbol: 'ALPACA:TSLA', description: 'Tesla Inc.', type: 'equity' },
@@ -178,6 +186,7 @@ app.get('/api/search', async (req) => {
     { symbol: 'ALPACA:AMZN', description: 'Amazon.com Inc.', type: 'equity' },
     { symbol: 'ALPACA:GOOGL', description: 'Alphabet Inc.', type: 'equity' },
     { symbol: 'ALPACA:META', description: 'Meta Platforms Inc.', type: 'equity' },
+    // Forex
     { symbol: 'OANDA:EUR_USD', description: 'Euro / US Dollar', type: 'forex' },
     { symbol: 'OANDA:GBP_USD', description: 'British Pound / US Dollar', type: 'forex' },
     { symbol: 'OANDA:USD_JPY', description: 'US Dollar / Japanese Yen', type: 'forex' },
@@ -185,6 +194,19 @@ app.get('/api/search', async (req) => {
     { symbol: 'OANDA:USD_CAD', description: 'US Dollar / Canadian Dollar', type: 'forex' },
     { symbol: 'OANDA:USD_CHF', description: 'US Dollar / Swiss Franc', type: 'forex' },
     { symbol: 'OANDA:NZD_USD', description: 'New Zealand Dollar / US Dollar', type: 'forex' },
+    // Commodities & Precious Metals
+    { symbol: 'COMMODITY:USOIL', description: 'Crude Oil (WTI / US Oil)', type: 'commodity' },
+    { symbol: 'COMMODITY:BCOUSD', description: 'Brent Crude Oil', type: 'commodity' },
+    { symbol: 'COMMODITY:XAUUSD', description: 'Gold Spot (XAU / USD)', type: 'commodity' },
+    { symbol: 'COMMODITY:XAGUSD', description: 'Silver Spot (XAG / USD)', type: 'commodity' },
+    { symbol: 'COMMODITY:XPTUSD', description: 'Platinum Spot (XPT / USD)', type: 'commodity' },
+    { symbol: 'COMMODITY:XPDUSD', description: 'Palladium Spot (XPD / USD)', type: 'commodity' },
+    // Major Indices
+    { symbol: 'INDEX:SPX', description: 'S&P 500 Index (SPX)', type: 'index' },
+    { symbol: 'INDEX:DJI', description: 'Dow Jones Industrial Average (DJIA)', type: 'index' },
+    { symbol: 'INDEX:IXIC', description: 'Nasdaq Composite Index', type: 'index' },
+    { symbol: 'INDEX:NDX', description: 'Nasdaq 100 Index', type: 'index' },
+    { symbol: 'INDEX:RUT', description: 'Russell 2000 Index', type: 'index' },
   ].filter((item) =>
     item.symbol.toLowerCase().includes(q.toLowerCase()) ||
     item.description.toLowerCase().includes(q.toLowerCase())

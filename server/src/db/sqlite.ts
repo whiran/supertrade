@@ -77,30 +77,43 @@ if (!existingAccount) {
 }
 
 // Seed preset watchlists
-const count = db.prepare('SELECT COUNT(*) as cnt FROM watchlists').get() as { cnt: number };
-if (count.cnt === 0) {
-  const insert = db.prepare('INSERT OR REPLACE INTO watchlists (id, name, symbols) VALUES (?, ?, ?)');
-  insert.run(
-    'crypto',
-    'Crypto',
-    JSON.stringify(['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT', 'BINANCE:BNBUSDT'])
-  );
-  insert.run(
-    'stocks',
-    'US Stocks',
-    JSON.stringify(['ALPACA:SPY', 'ALPACA:AAPL', 'ALPACA:TSLA', 'ALPACA:NVDA', 'ALPACA:MSFT'])
-  );
-  insert.run(
-    'forex',
-    'Forex',
-    JSON.stringify(['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:USD_JPY', 'OANDA:AUD_USD'])
-  );
-  insert.run(
-    'mixed',
-    'Mixed',
-    JSON.stringify(['BINANCE:BTCUSDT', 'ALPACA:SPY', 'OANDA:EUR_USD', 'BINANCE:ETHUSDT'])
-  );
-}
+const insertWatchlist = db.prepare('INSERT OR IGNORE INTO watchlists (id, name, symbols) VALUES (?, ?, ?)');
+insertWatchlist.run(
+  'crypto',
+  'Crypto',
+  JSON.stringify(['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT', 'BINANCE:BNBUSDT'])
+);
+insertWatchlist.run(
+  'stocks',
+  'US Stocks',
+  JSON.stringify(['ALPACA:SPY', 'ALPACA:AAPL', 'ALPACA:TSLA', 'ALPACA:NVDA', 'ALPACA:MSFT'])
+);
+insertWatchlist.run(
+  'forex',
+  'Forex',
+  JSON.stringify(['OANDA:EUR_USD', 'OANDA:GBP_USD', 'OANDA:USD_JPY', 'OANDA:AUD_USD'])
+);
+insertWatchlist.run(
+  'commodities',
+  'Commodities & Metals',
+  JSON.stringify([
+    'COMMODITY:USOIL',
+    'COMMODITY:XAUUSD',
+    'COMMODITY:XAGUSD',
+    'COMMODITY:XPTUSD',
+    'COMMODITY:XPDUSD',
+  ])
+);
+insertWatchlist.run(
+  'indices',
+  'Major Indices',
+  JSON.stringify(['INDEX:SPX', 'INDEX:DJI', 'INDEX:IXIC', 'INDEX:NDX'])
+);
+insertWatchlist.run(
+  'mixed',
+  'Mixed',
+  JSON.stringify(['BINANCE:BTCUSDT', 'ALPACA:SPY', 'COMMODITY:XAUUSD', 'INDEX:SPX', 'OANDA:EUR_USD'])
+);
 
 // ========================
 // Repositories

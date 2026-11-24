@@ -26,6 +26,17 @@ const FOREX_BASE_PRICES: Record<string, number> = {
   EUR_GBP: 0.8365,
   EUR_JPY: 162.7,
   GBP_JPY: 194.5,
+  // Metals & Commodities
+  XAU_USD: 2685.5,
+  XAG_USD: 31.45,
+  XPT_USD: 965.0,
+  XPD_USD: 1015.0,
+  WTICO_USD: 71.25,
+  BCO_USD: 75.4,
+  // Indices
+  SPX500_USD: 5985.0,
+  US30_USD: 44350.0,
+  NAS100_USD: 19280.0,
 };
 
 function normalizeSymbol(symbol: string): string {
@@ -33,7 +44,20 @@ function normalizeSymbol(symbol: string): string {
 }
 
 function getPrecision(symbol: string): number {
-  return symbol.includes('JPY') ? 3 : 5;
+  if (symbol.includes('JPY') || symbol.includes('XAG')) return 3;
+  if (
+    symbol.includes('XAU') ||
+    symbol.includes('XPT') ||
+    symbol.includes('XPD') ||
+    symbol.includes('WTICO') ||
+    symbol.includes('BCO') ||
+    symbol.includes('SPX') ||
+    symbol.includes('US30') ||
+    symbol.includes('NAS100')
+  ) {
+    return 2;
+  }
+  return 5;
 }
 
 function generateForexHistory(

@@ -3,7 +3,7 @@
 // Single source of truth for all server adapters, DB repos, WS messages, and panels
 // =============================================================================
 
-export type AssetClass = 'crypto' | 'forex' | 'equity';
+export type AssetClass = 'crypto' | 'forex' | 'equity' | 'commodity' | 'index';
 
 export type FeedQuality =
   | 'LIVE_EXCHANGE'

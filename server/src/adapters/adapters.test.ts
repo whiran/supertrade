@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { AlpacaAdapter } from './alpaca.js';
 import { OandaAdapter } from './oanda.js';
+import { CommoditiesAdapter } from './commodities.js';
+import { IndicesAdapter } from './indices.js';
 
 describe('Multi-Asset Adapters', () => {
   describe('AlpacaAdapter (US Equities)', () => {
@@ -21,14 +23,11 @@ describe('Multi-Asset Adapters', () => {
     it('streams live quotes and ticks when subscribed', async () => {
       const adapter = new AlpacaAdapter();
       let quoteCount = 0;
-      let barCount = 0;
 
       const unsub = adapter.subscribe(
         'ALPACA:AAPL',
         '1m',
-        (bar) => {
-          barCount++;
-        },
+        () => {},
         (quote) => {
           quoteCount++;
           expect(quote.symbol).toBe('ALPACA:AAPL');
@@ -38,10 +37,8 @@ describe('Multi-Asset Adapters', () => {
         }
       );
 
-      // Wait 1.5 seconds for at least one tick
       await new Promise((resolve) => setTimeout(resolve, 1500));
       unsub();
-
       expect(quoteCount).toBeGreaterThanOrEqual(1);
     });
   });
@@ -78,10 +75,92 @@ describe('Multi-Asset Adapters', () => {
         }
       );
 
-      // Wait 1.5 seconds for at least one tick
       await new Promise((resolve) => setTimeout(resolve, 1500));
       unsub();
+      expect(quoteCount).toBeGreaterThanOrEqual(1);
+    });
+  });
 
+  describe('CommoditiesAdapter (Crude Oil, Gold, Silver, Platinum, Palladium)', () => {
+    it('generates realistic history for metals and energy', async () => {
+      const adapter = new CommoditiesAdapter();
+      expect(adapter.id).toBe('commodities');
+      expect(adapter.assetClass).toBe('commodity');
+
+      const oilBars = await adapter.fetchHistory('COMMODITY:USOIL', '1m', 15);
+      expect(oilBars.length).toBeGreaterThanOrEqual(10);
+      expect(oilBars[oilBars.length - 1].close).toBeGreaterThan(30);
+
+      const goldBars = await adapter.fetchHistory('COMMODITY:XAUUSD', '1m', 15);
+      expect(goldBars.length).toBeGreaterThanOrEqual(10);
+      expect(goldBars[goldBars.length - 1].close).toBeGreaterThan(1500);
+
+      const silverBars = await adapter.fetchHistory('COMMODITY:XAGUSD', '1m', 15);
+      expect(silverBars.length).toBeGreaterThanOrEqual(10);
+      expect(silverBars[silverBars.length - 1].close).toBeGreaterThan(15);
+    });
+
+    it('streams live quotes for gold and crude oil', async () => {
+      const adapter = new CommoditiesAdapter();
+      let quoteCount = 0;
+
+      const unsub = adapter.subscribe(
+        'COMMODITY:XAUUSD',
+        '1m',
+        () => {},
+        (quote) => {
+          quoteCount++;
+          expect(quote.symbol).toBe('COMMODITY:XAUUSD');
+          expect(quote.assetClass).toBe('commodity');
+          expect(quote.last).toBeGreaterThan(2000);
+          expect(quote.ask).toBeGreaterThan(quote.bid);
+        }
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      unsub();
+      expect(quoteCount).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('IndicesAdapter (S&P 500, DJIA, Nasdaq Composite)', () => {
+    it('generates realistic history for major indices', async () => {
+      const adapter = new IndicesAdapter();
+      expect(adapter.id).toBe('indices');
+      expect(adapter.assetClass).toBe('index');
+
+      const spxBars = await adapter.fetchHistory('INDEX:SPX', '1m', 15);
+      expect(spxBars.length).toBeGreaterThanOrEqual(10);
+      expect(spxBars[spxBars.length - 1].close).toBeGreaterThan(3000);
+
+      const djiBars = await adapter.fetchHistory('INDEX:DJI', '1m', 15);
+      expect(djiBars.length).toBeGreaterThanOrEqual(10);
+      expect(djiBars[djiBars.length - 1].close).toBeGreaterThan(20000);
+
+      const ixicBars = await adapter.fetchHistory('INDEX:IXIC', '1m', 15);
+      expect(ixicBars.length).toBeGreaterThanOrEqual(10);
+      expect(ixicBars[ixicBars.length - 1].close).toBeGreaterThan(10000);
+    });
+
+    it('streams live ticks and quotes for S&P 500', async () => {
+      const adapter = new IndicesAdapter();
+      let quoteCount = 0;
+
+      const unsub = adapter.subscribe(
+        'INDEX:SPX',
+        '1m',
+        () => {},
+        (quote) => {
+          quoteCount++;
+          expect(quote.symbol).toBe('INDEX:SPX');
+          expect(quote.assetClass).toBe('index');
+          expect(quote.last).toBeGreaterThan(4000);
+          expect(quote.ask).toBeGreaterThan(quote.bid);
+        }
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      unsub();
       expect(quoteCount).toBeGreaterThanOrEqual(1);
     });
   });

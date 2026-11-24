@@ -20,6 +20,16 @@ import { IndicatorModal } from './panels/IndicatorModal.js';
 const TIMEFRAMES: Timeframe[] = ['1s', '5s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
 
 const QUICK_SYMBOLS = [
+  // Indices
+  { label: 'S&P 500', symbol: 'INDEX:SPX', category: 'index' },
+  { label: 'DJIA', symbol: 'INDEX:DJI', category: 'index' },
+  { label: 'NASDAQ', symbol: 'INDEX:IXIC', category: 'index' },
+  // Commodities & Metals
+  { label: 'OIL', symbol: 'COMMODITY:USOIL', category: 'commodity' },
+  { label: 'GOLD', symbol: 'COMMODITY:XAUUSD', category: 'commodity' },
+  { label: 'SILVER', symbol: 'COMMODITY:XAGUSD', category: 'commodity' },
+  { label: 'PLAT', symbol: 'COMMODITY:XPTUSD', category: 'commodity' },
+  { label: 'PALL', symbol: 'COMMODITY:XPDUSD', category: 'commodity' },
   // Crypto
   { label: 'BTC', symbol: 'BINANCE:BTCUSDT', category: 'crypto' },
   { label: 'ETH', symbol: 'BINANCE:ETHUSDT', category: 'crypto' },
@@ -27,11 +37,9 @@ const QUICK_SYMBOLS = [
   // US Equities
   { label: 'SPY', symbol: 'ALPACA:SPY', category: 'equity' },
   { label: 'AAPL', symbol: 'ALPACA:AAPL', category: 'equity' },
-  { label: 'TSLA', symbol: 'ALPACA:TSLA', category: 'equity' },
   { label: 'NVDA', symbol: 'ALPACA:NVDA', category: 'equity' },
   // Forex
   { label: 'EUR/USD', symbol: 'OANDA:EUR_USD', category: 'forex' },
-  { label: 'GBP/USD', symbol: 'OANDA:GBP_USD', category: 'forex' },
   { label: 'USD/JPY', symbol: 'OANDA:USD_JPY', category: 'forex' },
 ];
 
@@ -167,13 +175,50 @@ export default function App() {
           </div>
 
           {/* Quick-Select Symbols with Categorized Asset Class Sections */}
-          <div className="flex items-center space-x-1 bg-[#131722] px-1 py-0.5 rounded border border-[#2a2e39] text-xs">
+          <div className="flex items-center space-x-1 bg-[#131722] px-1 py-0.5 rounded border border-[#2a2e39] text-xs overflow-x-auto max-w-[620px]">
+            {/* Indices */}
+            <span className="text-[9px] font-bold text-[#10b981] px-0.5 uppercase tracking-wide">Index</span>
+            {QUICK_SYMBOLS.filter((qs) => qs.category === 'index').map((qs) => (
+              <button
+                key={qs.symbol}
+                onClick={() => setSymbol(qs.symbol)}
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors whitespace-nowrap ${
+                  activeSymbol === qs.symbol
+                    ? 'bg-[#10b981] text-black font-extrabold'
+                    : 'text-[#787b86] hover:text-[#d1d4dc]'
+                }`}
+              >
+                {qs.label}
+              </button>
+            ))}
+
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5 shrink-0" />
+
+            {/* Commodities */}
+            <span className="text-[9px] font-bold text-[#eab308] px-0.5 uppercase tracking-wide">Commodities</span>
+            {QUICK_SYMBOLS.filter((qs) => qs.category === 'commodity').map((qs) => (
+              <button
+                key={qs.symbol}
+                onClick={() => setSymbol(qs.symbol)}
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors whitespace-nowrap ${
+                  activeSymbol === qs.symbol
+                    ? 'bg-[#eab308] text-black font-extrabold'
+                    : 'text-[#787b86] hover:text-[#d1d4dc]'
+                }`}
+              >
+                {qs.label}
+              </button>
+            ))}
+
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5 shrink-0" />
+
+            {/* Crypto */}
             <span className="text-[9px] font-bold text-[#f59e0b] px-0.5 uppercase tracking-wide">Crypto</span>
             {QUICK_SYMBOLS.filter((qs) => qs.category === 'crypto').map((qs) => (
               <button
                 key={qs.symbol}
                 onClick={() => setSymbol(qs.symbol)}
-                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors whitespace-nowrap ${
                   activeSymbol === qs.symbol
                     ? 'bg-[#26a69a] text-white'
                     : 'text-[#787b86] hover:text-[#d1d4dc]'
@@ -183,14 +228,15 @@ export default function App() {
               </button>
             ))}
 
-            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5" />
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5 shrink-0" />
 
+            {/* Stocks */}
             <span className="text-[9px] font-bold text-[#38bdf8] px-0.5 uppercase tracking-wide">Stocks</span>
             {QUICK_SYMBOLS.filter((qs) => qs.category === 'equity').map((qs) => (
               <button
                 key={qs.symbol}
                 onClick={() => setSymbol(qs.symbol)}
-                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors whitespace-nowrap ${
                   activeSymbol === qs.symbol
                     ? 'bg-[#2962ff] text-white'
                     : 'text-[#787b86] hover:text-[#d1d4dc]'
@@ -200,14 +246,15 @@ export default function App() {
               </button>
             ))}
 
-            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5" />
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5 shrink-0" />
 
+            {/* Forex */}
             <span className="text-[9px] font-bold text-[#c084fc] px-0.5 uppercase tracking-wide">Forex</span>
             {QUICK_SYMBOLS.filter((qs) => qs.category === 'forex').map((qs) => (
               <button
                 key={qs.symbol}
                 onClick={() => setSymbol(qs.symbol)}
-                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors whitespace-nowrap ${
                   activeSymbol === qs.symbol
                     ? 'bg-[#9333ea] text-white'
                     : 'text-[#787b86] hover:text-[#d1d4dc]'
