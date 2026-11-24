@@ -213,27 +213,42 @@ export const ChartCanvas: React.FC<Props> = ({
 
     const unsubBar = wsClient.onBar((s, tf, bar) => {
       if (s !== symbol || tf !== timeframe) return;
-      candleSeries.update({
-        time: bar.time as any,
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      });
-      volumeSeries.update({
-        time: bar.time as any,
-        value: bar.volume,
-        color: bar.close >= bar.open ? '#26a69a44' : '#ef535044',
-      });
+      try {
+        const lastBar = barsRef.current[barsRef.current.length - 1];
+        if (lastBar && bar.time < lastBar.time) {
+          return; // Ignore out-of-order stale ticks
+        }
 
-      if (bar.isFinal) {
-        barsRef.current.push(bar);
-      } else if (barsRef.current.length > 0) {
-        barsRef.current[barsRef.current.length - 1] = bar;
+        candleSeries.update({
+          time: bar.time as any,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+        });
+        volumeSeries.update({
+          time: bar.time as any,
+          value: bar.volume,
+          color: bar.close >= bar.open ? '#26a69a44' : '#ef535044',
+        });
+
+        if (bar.isFinal) {
+          barsRef.current.push(bar);
+        } else if (barsRef.current.length > 0) {
+          if (barsRef.current[barsRef.current.length - 1].time === bar.time) {
+            barsRef.current[barsRef.current.length - 1] = bar;
+          } else {
+            barsRef.current.push(bar);
+          }
+        } else {
+          barsRef.current.push(bar);
+        }
+        updateLegend(bar);
+        indEngine.onBarUpdate(bar);
+        onBarUpdate?.(bar);
+      } catch (err) {
+        console.warn('[ChartCanvas] Bar update warning:', err);
       }
-      updateLegend(bar);
-      indEngine.onBarUpdate(bar);
-      onBarUpdate?.(bar);
     });
 
     const unsubQuote = wsClient.onQuote((quote) => {

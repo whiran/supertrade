@@ -35,7 +35,10 @@ export class BinanceAdapter implements ProviderAdapter {
   async fetchHistory(symbol: string, tf: Timeframe, limit: number, endSec?: number): Promise<CanonicalBar[]> {
     // 1. Check SQLite cache first
     const cached = getCandleRange(symbol, tf, limit, endSec);
-    if (cached.length >= Math.min(limit, 100)) {
+    const intervalSec = tf === '1d' ? 86400 : tf === '1h' ? 3600 : tf === '15m' ? 900 : tf === '5m' ? 300 : 60;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const lastCachedTime = cached.length > 0 ? cached[cached.length - 1].time : 0;
+    if (cached.length >= Math.min(limit, 100) && (endSec || (nowSec - lastCachedTime) < intervalSec * 2)) {
       return cached;
     }
 
@@ -91,14 +94,44 @@ export class BinanceAdapter implements ProviderAdapter {
 
     this.activeStreams.set(key, { symbol, tf });
     this.ensureConnection();
+    this.sendDynamicSubscribe(symbol, tf);
 
     return () => {
       this.onBarCallbacks.get(key)?.delete(onBar);
       this.onQuoteCallbacks.get(key)?.delete(onQuote);
       if (this.onBarCallbacks.get(key)?.size === 0) {
         this.activeStreams.delete(key);
+        this.sendDynamicUnsubscribe(symbol, tf);
       }
     };
+  }
+
+  private sendDynamicSubscribe(symbol: string, tf: Timeframe): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const s = normalizeSymbol(symbol).toLowerCase();
+      const interval = TF_MAP[tf] || '1m';
+      this.ws.send(
+        JSON.stringify({
+          method: 'SUBSCRIBE',
+          params: [`${s}@aggTrade`, `${s}@bookTicker`, `${s}@kline_${interval}`],
+          id: Date.now(),
+        })
+      );
+    }
+  }
+
+  private sendDynamicUnsubscribe(symbol: string, tf: Timeframe): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const s = normalizeSymbol(symbol).toLowerCase();
+      const interval = TF_MAP[tf] || '1m';
+      this.ws.send(
+        JSON.stringify({
+          method: 'UNSUBSCRIBE',
+          params: [`${s}@aggTrade`, `${s}@bookTicker`, `${s}@kline_${interval}`],
+          id: Date.now(),
+        })
+      );
+    }
   }
 
   private ensureConnection(): void {
@@ -122,6 +155,22 @@ export class BinanceAdapter implements ProviderAdapter {
 
     this.ws.on('open', () => {
       console.log(`[binance] Connected to combined streams (${streamList.length} streams)`);
+      // If activeStreams has grown, subscribe to all active streams
+      if (this.activeStreams.size > 0) {
+        const liveStreams: string[] = [];
+        for (const { symbol, tf } of this.activeStreams.values()) {
+          const s = normalizeSymbol(symbol).toLowerCase();
+          const interval = TF_MAP[tf] || '1m';
+          liveStreams.push(`${s}@aggTrade`, `${s}@bookTicker`, `${s}@kline_${interval}`);
+        }
+        this.ws?.send(
+          JSON.stringify({
+            method: 'SUBSCRIBE',
+            params: Array.from(new Set(liveStreams)),
+            id: Date.now(),
+          })
+        );
+      }
       // Proactive 23h connection rollover per spec
       if (this.rolloverTimer) clearTimeout(this.rolloverTimer);
       this.rolloverTimer = setTimeout(() => {
@@ -174,8 +223,10 @@ export class BinanceAdapter implements ProviderAdapter {
           const timeMs = data.T;
 
           for (const [k, cbs] of this.onBarCallbacks.entries()) {
-            if (k.startsWith(sym)) {
-              const [, tf] = k.split(':') as [string, Timeframe];
+            const parts = k.split(':');
+            const tf = parts.pop() as Timeframe;
+            const keySym = parts.join(':');
+            if (keySym === sym) {
               this.agg.addTick(sym, tf, price, vol, timeMs, (bar) => {
                 cbs.forEach((cb) => cb(bar));
               });
@@ -188,6 +239,7 @@ export class BinanceAdapter implements ProviderAdapter {
           const k = data.k;
           if (k && k.x) {
             const sym = `BINANCE:${data.s}`;
+            const klineInterval = k.i;
             const bar: CanonicalBar = {
               time: Math.floor(k.t / 1000),
               open: parseFloat(k.o),
@@ -198,7 +250,10 @@ export class BinanceAdapter implements ProviderAdapter {
               isFinal: true,
             };
             for (const [key, cbs] of this.onBarCallbacks.entries()) {
-              if (key.startsWith(sym)) {
+              const parts = key.split(':');
+              const tf = parts.pop() as Timeframe;
+              const keySym = parts.join(':');
+              if (keySym === sym && (TF_MAP[tf] === klineInterval || tf === klineInterval)) {
                 cbs.forEach((cb) => cb(bar));
               }
             }

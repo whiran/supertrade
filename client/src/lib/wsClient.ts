@@ -18,6 +18,7 @@ class TypedWsClient {
 
   // Reference counted subscriptions: "symbol:tf" -> count
   private subs = new Map<string, number>();
+  private messageQueue: WsClientMessage[] = [];
 
   private barListeners = new Set<BarCallback>();
   private quoteListeners = new Set<QuoteCallback>();
@@ -41,8 +42,16 @@ class TypedWsClient {
 
       // Resubscribe all active subscriptions
       for (const [key] of this.subs.entries()) {
-        const [symbol, tf] = key.split(':') as [string, Timeframe];
+        const parts = key.split(':');
+        const tf = parts.pop() as Timeframe;
+        const symbol = parts.join(':');
         this.send({ type: 'subscribe', symbol, tf });
+      }
+
+      // Flush any queued messages
+      while (this.messageQueue.length > 0) {
+        const msg = this.messageQueue.shift();
+        if (msg) this.send(msg);
       }
     };
 
@@ -80,6 +89,8 @@ class TypedWsClient {
   private send(msg: WsClientMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
+    } else {
+      this.messageQueue.push(msg);
     }
   }
 
