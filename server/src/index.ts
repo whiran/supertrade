@@ -29,6 +29,7 @@ import { searchSymbols, getCompanyNews } from './adapters/finnhub.js';
 import { getForexCalendar } from './adapters/forexfactory.js';
 
 import { alertRunner } from './engine/alertRunner.js';
+import { TF_SECONDS } from './engine/tickAggregator.js';
 import { paperBroker } from './engine/paperBroker.js';
 import { backtester } from './engine/backtester.js';
 import { screenerRoutes } from './routes/screener.js';
@@ -200,6 +201,7 @@ app.get('/api/history', async (req) => {
     parseInt(limit, 10),
     endSec ? parseInt(endSec, 10) : undefined
   );
+
   return { bars };
 });
 

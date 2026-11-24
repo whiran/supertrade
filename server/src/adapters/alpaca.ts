@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import type { CanonicalBar, LiveQuote, ProviderAdapter, Timeframe } from '@tv/shared';
 import { TickAggregator, TF_SECONDS } from '../engine/tickAggregator.js';
 import { getCandleRange, insertCandleBatch } from '../db/sqlite.js';
+import { fetchYahooMarketData } from './yahooFinance.js';
 
 const ALPACA_TF: Record<Timeframe, string> = {
   '1s': '1Sec',
@@ -17,13 +18,13 @@ const ALPACA_TF: Record<Timeframe, string> = {
 };
 
 const STOCK_BASE_PRICES: Record<string, number> = {
-  SPY: 596.5,
-  AAPL: 228.4,
-  TSLA: 342.8,
+  SPY: 722.3,
+  AAPL: 349.1,
+  TSLA: 342.5,
   NVDA: 141.5,
   MSFT: 422.3,
-  AMZN: 201.2,
-  GOOGL: 178.6,
+  AMZN: 205.0,
+  GOOGL: 185.0,
   META: 585.0,
 };
 
@@ -41,18 +42,18 @@ function generateStockHistory(
   const count = Math.min(limit || 500, 1000);
   const nowSec = Math.floor(Date.now() / 1000);
   const endSec = Math.floor(nowSec / intervalSec) * intervalSec;
-  const startSec = endSec - count * intervalSec;
+  const startSec = endSec - (count - 1) * intervalSec;
 
   const bars: CanonicalBar[] = [];
-  let currentPrice = basePrice * 0.96; // start slightly lower to show trend
+  let currentPrice = basePrice * 0.985;
 
   for (let i = 0; i < count; i++) {
     const time = startSec + i * intervalSec;
-    const deltaPct = (Math.random() - 0.495) * 0.003;
+    const deltaPct = (Math.random() - 0.498) * 0.0015;
     const open = currentPrice;
     const close = +(open * (1 + deltaPct)).toFixed(2);
-    const high = +(Math.max(open, close) * (1 + Math.random() * 0.0015)).toFixed(2);
-    const low = +(Math.min(open, close) * (1 - Math.random() * 0.0015)).toFixed(2);
+    const high = +(Math.max(open, close) * (1 + Math.random() * 0.001)).toFixed(2);
+    const low = +(Math.min(open, close) * (1 - Math.random() * 0.001)).toFixed(2);
     const volume = Math.floor(Math.random() * 25000 + 5000);
     currentPrice = close;
 
@@ -81,6 +82,7 @@ export class AlpacaAdapter implements ProviderAdapter {
   private ws: WebSocket | null = null;
   private subscribedSymbols = new Set<string>();
   private lastPrices = new Map<string, number>();
+  private lastBarTimes = new Map<string, number>();
 
   get isConfigured(): boolean {
     return Boolean(this.apiKey && this.apiSecret);
@@ -134,12 +136,22 @@ export class AlpacaAdapter implements ProviderAdapter {
       }
     }
 
+    // Try real-market data from Yahoo Finance (matches live TradingView prices)
+    const yahoo = await fetchYahooMarketData(symbol, tf, limit);
+    if (yahoo && yahoo.bars.length > 0) {
+      insertCandleBatch(yahoo.bars, symbol, tf);
+      this.lastPrices.set(sym, yahoo.price);
+      this.lastBarTimes.set(sym, yahoo.bars[yahoo.bars.length - 1].time);
+      return yahoo.bars;
+    }
+
     // Fallback: Generate realistic synthetic market history
     const basePrice = STOCK_BASE_PRICES[sym] || 150.0;
     const bars = generateStockHistory(symbol, tf, limit, basePrice);
     insertCandleBatch(bars, symbol, tf);
     if (bars.length > 0) {
       this.lastPrices.set(sym, bars[bars.length - 1].close);
+      this.lastBarTimes.set(sym, bars[bars.length - 1].time);
     }
     return bars;
   }
@@ -230,6 +242,11 @@ export class AlpacaAdapter implements ProviderAdapter {
     let livePrice = this.lastPrices.get(sym) || basePrice;
 
     const timer = setInterval(() => {
+      const lastBarTime = this.lastBarTimes.get(sym);
+      const intervalSec = TF_SECONDS[tf] || 60;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isMarketClosed = Boolean(lastBarTime && (nowSec - lastBarTime > 4 * intervalSec));
+
       const changePct = (Math.random() - 0.498) * 0.0006;
       livePrice = +(livePrice * (1 + changePct)).toFixed(2);
       this.lastPrices.set(sym, livePrice);
@@ -251,7 +268,10 @@ export class AlpacaAdapter implements ProviderAdapter {
         timestampMs: Date.now(),
       });
 
-      this.agg.addTick(symbol, tf, livePrice, vol, Date.now(), onBar);
+      // Avoid creating phantom candles in the future when market is closed
+      if (!isMarketClosed) {
+        this.agg.addTick(symbol, tf, livePrice, vol, Date.now(), onBar);
+      }
     }, 1200);
 
     return () => {

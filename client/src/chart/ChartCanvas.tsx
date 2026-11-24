@@ -47,6 +47,19 @@ const FEED_TOOLTIPS: Record<FeedQuality, { label: string; bg: string; color: str
   },
 };
 
+const TF_SECONDS: Record<Timeframe, number> = {
+  '1s': 1,
+  '5s': 5,
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '30m': 1800,
+  '1h': 3600,
+  '4h': 14400,
+  '1d': 86400,
+  '1w': 604800,
+};
+
 export const ChartCanvas: React.FC<Props> = ({
   symbol,
   timeframe,
@@ -118,6 +131,9 @@ export const ChartCanvas: React.FC<Props> = ({
         borderColor: '#2a2e39',
         timeVisible: true,
         secondsVisible: timeframe === '1s' || timeframe === '5s',
+        rightOffset: 3,
+        barSpacing: 9,
+        minBarSpacing: 1.5,
       },
       autoSize: true,
     });
@@ -150,6 +166,13 @@ export const ChartCanvas: React.FC<Props> = ({
 
     const indEngine = new IndicatorEngine(chart);
     indicatorEngineRef.current = indEngine;
+
+    // Auto-scale event listener
+    const handleAutoScale = () => {
+      chart.timeScale().fitContent();
+      chart.priceScale('right').applyOptions({ autoScale: true });
+    };
+    window.addEventListener('tv:auto-scale', handleAutoScale);
 
     // Crosshair inspection without React re-renders
     chart.subscribeCrosshairMove((param) => {
@@ -200,6 +223,7 @@ export const ChartCanvas: React.FC<Props> = ({
             }))
           );
           updateLegend(bars[bars.length - 1]);
+          chart.timeScale().scrollToRealTime();
         }
       } catch (err) {
         console.warn('[ChartCanvas] History fetch error:', err);
@@ -219,6 +243,35 @@ export const ChartCanvas: React.FC<Props> = ({
           return; // Ignore out-of-order stale ticks
         }
 
+        // Bridge minor 1-3 tick network gaps if needed
+        const intervalSec = TF_SECONDS[timeframe] || 60;
+        if (lastBar && bar.time > lastBar.time + intervalSec && bar.time <= lastBar.time + 3 * intervalSec) {
+          for (let t = lastBar.time + intervalSec; t < bar.time; t += intervalSec) {
+            const bridgeBar: CanonicalBar = {
+              time: t,
+              open: lastBar.close,
+              high: lastBar.close,
+              low: lastBar.close,
+              close: lastBar.close,
+              volume: 0,
+              isFinal: true,
+            };
+            candleSeries.update({
+              time: bridgeBar.time as any,
+              open: bridgeBar.open,
+              high: bridgeBar.high,
+              low: bridgeBar.low,
+              close: bridgeBar.close,
+            });
+            volumeSeries.update({
+              time: bridgeBar.time as any,
+              value: 0,
+              color: '#787b8622',
+            });
+            barsRef.current.push(bridgeBar);
+          }
+        }
+
         candleSeries.update({
           time: bar.time as any,
           open: bar.open,
@@ -232,11 +285,10 @@ export const ChartCanvas: React.FC<Props> = ({
           color: bar.close >= bar.open ? '#26a69a44' : '#ef535044',
         });
 
-        if (bar.isFinal) {
-          barsRef.current.push(bar);
-        } else if (barsRef.current.length > 0) {
-          if (barsRef.current[barsRef.current.length - 1].time === bar.time) {
-            barsRef.current[barsRef.current.length - 1] = bar;
+        if (barsRef.current.length > 0) {
+          const lastIdx = barsRef.current.length - 1;
+          if (barsRef.current[lastIdx].time === bar.time) {
+            barsRef.current[lastIdx] = bar;
           } else {
             barsRef.current.push(bar);
           }
@@ -264,6 +316,7 @@ export const ChartCanvas: React.FC<Props> = ({
     });
 
     return () => {
+      window.removeEventListener('tv:auto-scale', handleAutoScale);
       drawingCtrl.saveToServer();
       drawingCtrl.destroy();
       indEngine.destroy();

@@ -1,6 +1,7 @@
 import type { CanonicalBar, LiveQuote, ProviderAdapter, Timeframe } from '@tv/shared';
 import { TickAggregator, TF_SECONDS } from '../engine/tickAggregator.js';
 import { getCandleRange, insertCandleBatch } from '../db/sqlite.js';
+import { fetchYahooMarketData } from './yahooFinance.js';
 
 const OANDA_GRAN: Record<Timeframe, string> = {
   '1s': 'S5',
@@ -16,39 +17,39 @@ const OANDA_GRAN: Record<Timeframe, string> = {
 };
 
 const FOREX_BASE_PRICES: Record<string, number> = {
-  EUR_USD: 1.0525,
-  GBP_USD: 1.258,
-  USD_JPY: 154.6,
-  AUD_USD: 0.6515,
-  USD_CAD: 1.401,
+  EUR_USD: 1.0961,
+  GBP_USD: 1.3089,
+  USD_JPY: 159.11,
+  AUD_USD: 0.652,
+  USD_CAD: 1.405,
   USD_CHF: 0.887,
   NZD_USD: 0.584,
-  EUR_GBP: 0.8365,
-  EUR_JPY: 162.7,
-  GBP_JPY: 194.5,
+  EUR_GBP: 0.837,
+  EUR_JPY: 174.4,
+  GBP_JPY: 208.2,
   // Metals & Commodities
-  XAU_USD: 2685.5,
-  XAG_USD: 31.45,
-  XPT_USD: 965.0,
-  XPD_USD: 1015.0,
-  WTICO_USD: 71.25,
-  BCO_USD: 75.4,
+  XAU_USD: 3624.1,
+  XAG_USD: 42.02,
+  XPT_USD: 980.0,
+  XPD_USD: 1020.0,
+  WTICO_USD: 79.92,
+  BCO_USD: 83.5,
   // Indices
-  SPX500_USD: 5985.0,
-  US30_USD: 44350.0,
-  NAS100_USD: 19280.0,
+  SPX500_USD: 7237.2,
+  US30_USD: 49595.3,
+  NAS100_USD: 25100.0,
 };
 
 // Benchmark USD rates for dynamic cross-currency pricing of arbitrary pairs
 const USD_RATES: Record<string, number> = {
-  EUR: 1.0525,
-  GBP: 1.258,
-  AUD: 0.6515,
+  EUR: 1.0961,
+  GBP: 1.3089,
+  AUD: 0.652,
   NZD: 0.584,
   USD: 1.0,
-  CAD: 1 / 1.401,
+  CAD: 1 / 1.405,
   CHF: 1 / 0.887,
-  JPY: 1 / 154.6,
+  JPY: 1 / 159.11,
   TRY: 1 / 35.2,
   INR: 1 / 84.5,
   ZAR: 1 / 18.2,
@@ -123,7 +124,7 @@ function generateForexHistory(
   const count = Math.min(limit || 500, 1000);
   const nowSec = Math.floor(Date.now() / 1000);
   const endSec = Math.floor(nowSec / intervalSec) * intervalSec;
-  const startSec = endSec - count * intervalSec;
+  const startSec = endSec - (count - 1) * intervalSec;
   const decimals = getPrecision(symbol);
 
   const bars: CanonicalBar[] = [];
@@ -161,6 +162,7 @@ export class OandaAdapter implements ProviderAdapter {
   private accountId = process.env.OANDA_ACCOUNT_ID || '';
   private agg = new TickAggregator();
   private lastPrices = new Map<string, number>();
+  private lastBarTimes = new Map<string, number>();
 
   get isConfigured(): boolean {
     return Boolean(this.apiKey && this.accountId);
@@ -219,12 +221,22 @@ export class OandaAdapter implements ProviderAdapter {
       }
     }
 
+    // Try real-market data from Yahoo Finance (matches live TradingView prices)
+    const yahoo = await fetchYahooMarketData(symbol, tf, limit);
+    if (yahoo && yahoo.bars.length > 0) {
+      insertCandleBatch(yahoo.bars, symbol, tf);
+      this.lastPrices.set(instrument, yahoo.price);
+      this.lastBarTimes.set(instrument, yahoo.bars[yahoo.bars.length - 1].time);
+      return yahoo.bars;
+    }
+
     // Fallback: Realistic synthetic forex bars
     const basePrice = getDynamicBasePrice(instrument);
     const bars = generateForexHistory(instrument, tf, limit, basePrice);
     insertCandleBatch(bars, symbol, tf);
     if (bars.length > 0) {
       this.lastPrices.set(instrument, bars[bars.length - 1].close);
+      this.lastBarTimes.set(instrument, bars[bars.length - 1].time);
     }
     return bars;
   }
@@ -306,6 +318,11 @@ export class OandaAdapter implements ProviderAdapter {
     const pipSize = decimals === 3 ? 0.01 : 0.0001;
 
     const timer = setInterval(() => {
+      const lastBarTime = this.lastBarTimes.get(instrument);
+      const intervalSec = TF_SECONDS[tf] || 60;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isMarketClosed = Boolean(lastBarTime && (nowSec - lastBarTime > 4 * intervalSec));
+
       // Fluctuations of ±0.2 to 0.8 pips per tick
       const pipDelta = (Math.random() - 0.498) * 0.8;
       livePrice = +(livePrice + pipDelta * pipSize).toFixed(decimals);
@@ -328,7 +345,9 @@ export class OandaAdapter implements ProviderAdapter {
         timestampMs: Date.now(),
       });
 
-      this.agg.addTick(symbol, tf, livePrice, 0, Date.now(), onBar);
+      if (!isMarketClosed) {
+        this.agg.addTick(symbol, tf, livePrice, 0, Date.now(), onBar);
+      }
     }, 1000);
 
     return () => {

@@ -47,6 +47,24 @@ export class TickAggregator {
         // Fallback for tests or before DB init
       }
       onBar(finalBar);
+
+      // Bridge any skipped intervals between existing.time and barStartSec to eliminate blank gaps
+      const steps = Math.min(Math.floor((barStartSec - existing.time) / intervalSec), 120);
+      for (let i = 1; i < steps; i++) {
+        const bridgeBar: CanonicalBar = {
+          time: existing.time + i * intervalSec,
+          open: existing.close,
+          high: existing.close,
+          low: existing.close,
+          close: existing.close,
+          volume: 0,
+          isFinal: true,
+        };
+        try {
+          insertCandle(bridgeBar, symbol, tf);
+        } catch {}
+        onBar(bridgeBar);
+      }
     }
 
     const current = this.openBars.get(key);

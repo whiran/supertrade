@@ -129,6 +129,12 @@ export default function App() {
   const [indicatorModalOpen, setIndicatorModalOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [inlineSymbol, setInlineSymbol] = useState(activeSymbol);
+  const [tickSize, setTickSize] = useState('1');
+  const [aggregationMode, setAggregationMode] = useState('candles');
+
+  const handleAutoScale = () => {
+    window.dispatchEvent(new CustomEvent('tv:auto-scale'));
+  };
 
   // Sync inline symbol with activeSymbol
   useEffect(() => {
@@ -197,12 +203,13 @@ export default function App() {
             <span>PRECISION TV</span>
           </div>
 
-          {/* Direct Typeable Symbol Box matching terminal aesthetics */}
+          {/* Orderflow & TradingView Terminal Controls: SYMBOL | TICK | A | AGGREGATION | PERIOD */}
+          {/* SYMBOL */}
           <form
             onSubmit={handleInlineSymbolSubmit}
             className="flex items-center space-x-1.5 bg-[#131722] border border-[#2a2e39] rounded px-2 py-0.5"
           >
-            <span className="text-[10px] font-extrabold text-[#787b86] uppercase tracking-wider">
+            <span className="text-[10px] font-extrabold text-[#d0d8e8] uppercase tracking-wider">
               SYMBOL:
             </span>
             <input
@@ -215,38 +222,78 @@ export default function App() {
                   (e.target as HTMLInputElement).blur();
                 }
               }}
-              placeholder="e.g. EURUSD, ETHUSDT"
-              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-2 py-0.5 rounded outline-none w-32 uppercase text-center"
+              placeholder="e.g. ETHUSDT, EURUSD"
+              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-2 py-0.5 rounded outline-none w-28 uppercase text-center"
               title="Type any currency pair or symbol and press Enter to switch"
             />
             <button
               type="button"
               onClick={() => setSearchModalOpen(true)}
-              className="text-[#787b86] hover:text-white px-1 text-xs font-bold transition-colors"
-              title="Open Symbol Search & Catalog"
+              className="text-[#787b86] hover:text-white px-0.5 text-xs font-bold transition-colors"
+              title="Search & Add Symbols"
             >
               🔍
             </button>
           </form>
 
-          {/* Timeframe Bar with PERIOD label */}
-          <div className="flex items-center space-x-0.5 bg-[#131722] p-0.5 rounded border border-[#2a2e39]">
-            <span className="text-[9px] font-extrabold text-[#787b86] px-1 uppercase tracking-wider">
+          {/* TICK */}
+          <div className="flex items-center space-x-1 bg-[#131722] border border-[#2a2e39] rounded px-1.5 py-0.5">
+            <span className="text-[10px] font-extrabold text-[#d0d8e8] uppercase tracking-wider">
+              TICK:
+            </span>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={tickSize}
+              onChange={(e) => setTickSize(e.target.value)}
+              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-1 py-0.5 rounded outline-none w-8 text-center"
+              title="Tick filter / minimum tick"
+            />
+          </div>
+
+          {/* AUTO-SCALE (A) */}
+          <button
+            type="button"
+            onClick={handleAutoScale}
+            className="bg-[#1e222d] hover:bg-[#2a2e39] active:bg-[#2962ff] border border-[#2a2e39] text-white font-extrabold text-xs px-2 py-1 rounded transition-colors"
+            title="Auto Scale Chart (A)"
+          >
+            A
+          </button>
+
+          {/* AGGREGATION */}
+          <div className="flex items-center bg-[#131722] border border-[#2a2e39] rounded px-1 py-0.5">
+            <select
+              value={aggregationMode}
+              onChange={(e) => setAggregationMode(e.target.value)}
+              className="bg-[#1e222d] border border-[#2a2e39] text-[#00e5ff] text-xs font-extrabold px-1.5 py-0.5 rounded outline-none cursor-pointer"
+            >
+              <option value="candles">-- AGGREGATION --</option>
+              <option value="heikin_ashi">Heikin-Ashi</option>
+              <option value="hollow">Hollow Candles</option>
+              <option value="line">Line</option>
+              <option value="area">Area</option>
+              <option value="tick_1">1-Tick</option>
+            </select>
+          </div>
+
+          {/* PERIOD */}
+          <div className="flex items-center space-x-1 bg-[#131722] border border-[#2a2e39] rounded px-1.5 py-0.5">
+            <span className="text-[10px] font-extrabold text-[#d0d8e8] uppercase tracking-wider">
               PERIOD:
             </span>
-            {TIMEFRAMES.map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-1.5 py-0.5 text-[11px] font-semibold rounded transition-colors ${
-                  activeTimeframe === tf
-                    ? 'bg-[#2962ff] text-white'
-                    : 'text-[#787b86] hover:text-[#d1d4dc]'
-                }`}
-              >
-                {tf}
-              </button>
-            ))}
+            <select
+              value={activeTimeframe}
+              onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+              className="bg-[#1e222d] border border-[#2a2e39] text-[#00e5ff] text-xs font-extrabold px-1.5 py-0.5 rounded outline-none cursor-pointer uppercase"
+            >
+              {TIMEFRAMES.map((tf) => (
+                <option key={tf} value={tf}>
+                  {tf.toUpperCase()}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Quick-Select Symbols with Categorized Asset Class Sections */}
