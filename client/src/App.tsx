@@ -20,12 +20,19 @@ import { IndicatorModal } from './panels/IndicatorModal.js';
 const TIMEFRAMES: Timeframe[] = ['1s', '5s', '1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w'];
 
 const QUICK_SYMBOLS = [
-  { label: 'BTC', symbol: 'BINANCE:BTCUSDT' },
-  { label: 'ETH', symbol: 'BINANCE:ETHUSDT' },
-  { label: 'SOL', symbol: 'BINANCE:SOLUSDT' },
-  { label: 'XRP', symbol: 'BINANCE:XRPUSDT' },
-  { label: 'BNB', symbol: 'BINANCE:BNBUSDT' },
-  { label: 'DOGE', symbol: 'BINANCE:DOGEUSDT' },
+  // Crypto
+  { label: 'BTC', symbol: 'BINANCE:BTCUSDT', category: 'crypto' },
+  { label: 'ETH', symbol: 'BINANCE:ETHUSDT', category: 'crypto' },
+  { label: 'SOL', symbol: 'BINANCE:SOLUSDT', category: 'crypto' },
+  // US Equities
+  { label: 'SPY', symbol: 'ALPACA:SPY', category: 'equity' },
+  { label: 'AAPL', symbol: 'ALPACA:AAPL', category: 'equity' },
+  { label: 'TSLA', symbol: 'ALPACA:TSLA', category: 'equity' },
+  { label: 'NVDA', symbol: 'ALPACA:NVDA', category: 'equity' },
+  // Forex
+  { label: 'EUR/USD', symbol: 'OANDA:EUR_USD', category: 'forex' },
+  { label: 'GBP/USD', symbol: 'OANDA:GBP_USD', category: 'forex' },
+  { label: 'USD/JPY', symbol: 'OANDA:USD_JPY', category: 'forex' },
 ];
 
 const DRAWING_TOOLS = [
@@ -159,15 +166,50 @@ export default function App() {
             ))}
           </div>
 
-          {/* Quick-Select Symbols */}
-          <div className="flex items-center space-x-0.5 bg-[#131722] p-0.5 rounded border border-[#2a2e39]">
-            {QUICK_SYMBOLS.map((qs) => (
+          {/* Quick-Select Symbols with Categorized Asset Class Sections */}
+          <div className="flex items-center space-x-1 bg-[#131722] px-1 py-0.5 rounded border border-[#2a2e39] text-xs">
+            <span className="text-[9px] font-bold text-[#f59e0b] px-0.5 uppercase tracking-wide">Crypto</span>
+            {QUICK_SYMBOLS.filter((qs) => qs.category === 'crypto').map((qs) => (
               <button
                 key={qs.symbol}
                 onClick={() => setSymbol(qs.symbol)}
-                className={`px-2 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
                   activeSymbol === qs.symbol
                     ? 'bg-[#26a69a] text-white'
+                    : 'text-[#787b86] hover:text-[#d1d4dc]'
+                }`}
+              >
+                {qs.label}
+              </button>
+            ))}
+
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5" />
+
+            <span className="text-[9px] font-bold text-[#38bdf8] px-0.5 uppercase tracking-wide">Stocks</span>
+            {QUICK_SYMBOLS.filter((qs) => qs.category === 'equity').map((qs) => (
+              <button
+                key={qs.symbol}
+                onClick={() => setSymbol(qs.symbol)}
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                  activeSymbol === qs.symbol
+                    ? 'bg-[#2962ff] text-white'
+                    : 'text-[#787b86] hover:text-[#d1d4dc]'
+                }`}
+              >
+                {qs.label}
+              </button>
+            ))}
+
+            <div className="w-[1px] h-3 bg-[#2a2e39] mx-0.5" />
+
+            <span className="text-[9px] font-bold text-[#c084fc] px-0.5 uppercase tracking-wide">Forex</span>
+            {QUICK_SYMBOLS.filter((qs) => qs.category === 'forex').map((qs) => (
+              <button
+                key={qs.symbol}
+                onClick={() => setSymbol(qs.symbol)}
+                className={`px-1.5 py-0.5 text-[11px] font-bold rounded transition-colors ${
+                  activeSymbol === qs.symbol
+                    ? 'bg-[#9333ea] text-white'
                     : 'text-[#787b86] hover:text-[#d1d4dc]'
                 }`}
               >

@@ -162,17 +162,35 @@ app.get('/api/search', async (req) => {
   const { q = '' } = req.query as any;
   if (!q) return { results: [] };
   const finnhubResults = await searchSymbols(q);
-  // Default crypto search items
-  const cryptoDefaults = [
+  // Default multi-asset search items (Crypto, US Equities, Forex)
+  const defaultSymbols = [
     { symbol: 'BINANCE:BTCUSDT', description: 'Bitcoin / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:ETHUSDT', description: 'Ethereum / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:SOLUSDT', description: 'Solana / Tether US', type: 'crypto' },
+    { symbol: 'BINANCE:XRPUSDT', description: 'Ripple / Tether US', type: 'crypto' },
     { symbol: 'BINANCE:BNBUSDT', description: 'BNB / Tether US', type: 'crypto' },
-    { symbol: 'OANDA:EUR_USD', description: 'Euro / US Dollar', type: 'forex' },
+    { symbol: 'BINANCE:DOGEUSDT', description: 'Dogecoin / Tether US', type: 'crypto' },
     { symbol: 'ALPACA:SPY', description: 'SPDR S&P 500 ETF Trust', type: 'equity' },
-  ].filter((item) => item.symbol.toLowerCase().includes(q.toLowerCase()));
+    { symbol: 'ALPACA:AAPL', description: 'Apple Inc.', type: 'equity' },
+    { symbol: 'ALPACA:TSLA', description: 'Tesla Inc.', type: 'equity' },
+    { symbol: 'ALPACA:NVDA', description: 'NVIDIA Corporation', type: 'equity' },
+    { symbol: 'ALPACA:MSFT', description: 'Microsoft Corporation', type: 'equity' },
+    { symbol: 'ALPACA:AMZN', description: 'Amazon.com Inc.', type: 'equity' },
+    { symbol: 'ALPACA:GOOGL', description: 'Alphabet Inc.', type: 'equity' },
+    { symbol: 'ALPACA:META', description: 'Meta Platforms Inc.', type: 'equity' },
+    { symbol: 'OANDA:EUR_USD', description: 'Euro / US Dollar', type: 'forex' },
+    { symbol: 'OANDA:GBP_USD', description: 'British Pound / US Dollar', type: 'forex' },
+    { symbol: 'OANDA:USD_JPY', description: 'US Dollar / Japanese Yen', type: 'forex' },
+    { symbol: 'OANDA:AUD_USD', description: 'Australian Dollar / US Dollar', type: 'forex' },
+    { symbol: 'OANDA:USD_CAD', description: 'US Dollar / Canadian Dollar', type: 'forex' },
+    { symbol: 'OANDA:USD_CHF', description: 'US Dollar / Swiss Franc', type: 'forex' },
+    { symbol: 'OANDA:NZD_USD', description: 'New Zealand Dollar / US Dollar', type: 'forex' },
+  ].filter((item) =>
+    item.symbol.toLowerCase().includes(q.toLowerCase()) ||
+    item.description.toLowerCase().includes(q.toLowerCase())
+  );
 
-  return { results: [...cryptoDefaults, ...finnhubResults] };
+  return { results: [...defaultSymbols, ...finnhubResults] };
 });
 
 app.get('/api/watchlists', async () => ({ watchlists: getWatchlists() }));
