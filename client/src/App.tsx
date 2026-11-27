@@ -109,9 +109,11 @@ export default function App() {
     aiZonesEnabled,
     autoSigEnabled,
     chartAggregation,
+    tickSize,
     setSymbol,
     setTimeframe,
     setChartAggregation,
+    setTickSize,
     setLayoutMode,
     setActivePanel,
     setReplayMode,
@@ -131,7 +133,6 @@ export default function App() {
   const [indicatorModalOpen, setIndicatorModalOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [inlineSymbol, setInlineSymbol] = useState(activeSymbol);
-  const [tickSize, setTickSize] = useState('1');
 
   const handleAutoScale = () => {
     window.dispatchEvent(new CustomEvent('tv:auto-scale'));
@@ -244,12 +245,17 @@ export default function App() {
             </span>
             <input
               type="number"
-              min="1"
-              max="1000"
+              min="0.0001"
+              step="any"
               value={tickSize}
-              onChange={(e) => setTickSize(e.target.value)}
-              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-1 py-0.5 rounded outline-none w-8 text-center"
-              title="Tick filter / minimum tick"
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val) && val > 0) {
+                  setTickSize(val);
+                }
+              }}
+              className="bg-[#1e222d] border border-[#2a2e39] focus:border-[#2962ff] text-white text-xs font-extrabold px-1 py-0.5 rounded outline-none w-12 text-center"
+              title="Tick size / aggregation increment (e.g. 1, 2, 5, 10, 0.1, 0.01)"
             />
           </div>
 

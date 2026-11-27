@@ -53,7 +53,7 @@ export const MultiChartGrid: React.FC = () => {
         const timeframe = syncTimeframe || i === 0 ? activeTimeframe : '1m';
 
         return (
-          <div key={`${symbol}-${timeframe}-${i}`} className="w-full h-full bg-[#131722] relative">
+          <div key={`chart-slot-${i}`} className="w-full h-full bg-[#131722] relative">
             <ChartCanvas
               symbol={symbol}
               timeframe={timeframe}

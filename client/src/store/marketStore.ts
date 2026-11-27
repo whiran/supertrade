@@ -64,11 +64,13 @@ interface MarketState {
 
   // Chart Aggregation / Style mode (candles, heikin_ashi, hollow, bars, line, area, baseline)
   chartAggregation: ChartAggregationType;
+  tickSize: number;
 
   // Actions
   setSymbol: (symbol: string) => void;
   setTimeframe: (tf: Timeframe) => void;
   setChartAggregation: (agg: ChartAggregationType) => void;
+  setTickSize: (tickSize: number) => void;
   setLayoutMode: (mode: LayoutGridMode) => void;
   setSyncCrosshairs: (val: boolean) => void;
   setSyncSymbol: (val: boolean) => void;
@@ -112,10 +114,12 @@ export const useMarketStore = create<MarketState>((set) => ({
 
   activeIndicators: ['VOL', 'CVD', 'S.TREND'],
   chartAggregation: 'candles',
+  tickSize: 1,
 
   setSymbol: (symbol) => set({ activeSymbol: symbol }),
   setTimeframe: (tf) => set({ activeTimeframe: tf }),
   setChartAggregation: (chartAggregation) => set({ chartAggregation }),
+  setTickSize: (tickSize) => set({ tickSize }),
   setLayoutMode: (mode) => set({ layoutMode: mode }),
   setSyncCrosshairs: (syncCrosshairs) => set({ syncCrosshairs }),
   setSyncSymbol: (syncSymbol) => set({ syncSymbol }),

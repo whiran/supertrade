@@ -102,11 +102,13 @@ export async function fetchYahooMarketData(
 
     if (rawBars.length === 0) return null;
 
-    // Handle 4h aggregation from 1h bars if requested
-    let finalBars = rawBars;
-    if (tf === '4h' && cfg.interval === '1h') {
-      finalBars = aggregateBars(rawBars, 14400);
-    }
+    // Bucket-align ALL timeframes so LWC sees clean, regularly-spaced timestamps
+    const TF_BUCKET_SEC: Record<string, number> = {
+      '1s': 1, '5s': 5, '1m': 60, '5m': 300, '15m': 900,
+      '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400, '1w': 604800,
+    };
+    const bucketSec = TF_BUCKET_SEC[tf] || 60;
+    let finalBars = aggregateBars(rawBars, bucketSec);
 
     const sliced = finalBars.slice(-limit);
     const lastPrice = sliced[sliced.length - 1]?.close || price;
