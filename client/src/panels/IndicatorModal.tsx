@@ -33,6 +33,7 @@ export const ALL_INDICATORS: IndicatorItem[] = [
   { id: 'ABS', name: 'ABS (Absorption Markers)', desc: 'Visual circles marking absorbed aggressive flow', category: 'Volume / Delta', badge: 'OrderFlow' },
 
   // 3. Structure
+  { id: 'GUARDIAN', name: 'GUARDIAN (Guardeer SMC + Impulse)', desc: 'Full Smart Money Structure (BOS/CHoCH/CHoCH+), Volumetric Order Blocks, FVGs, Strong/Weak H/L, EQH/EQL & Impulse Trend', category: 'Structure', badge: 'Special' },
   { id: 'FVG', name: 'FVG (Fair Value Gaps)', desc: '3-candle imbalance gaps where price was delivered inefficiently', category: 'Structure', badge: 'SMC' },
   { id: 'SNR', name: 'SNR (Support & Resistance Auto)', desc: 'Automated horizontal key structure levels', category: 'Structure', badge: 'Standard' },
   { id: 'SMC', name: 'SMC (Smart Money Structure)', desc: 'Break of Structure (BOS) and Change of Character (CHoCH)', category: 'Structure', badge: 'SMC' },

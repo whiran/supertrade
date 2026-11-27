@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   createChart,
+  createSeriesMarkers,
   CandlestickSeries,
   HistogramSeries,
   LineSeries,
@@ -10,12 +11,15 @@ import {
   CrosshairMode,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type IPriceLine,
 } from 'lightweight-charts';
 import type { CanonicalBar, LiveQuote, Timeframe, FeedQuality } from '@tv/shared';
 import { wsClient } from '../lib/wsClient.js';
 import { DrawingController } from './DrawingController.js';
 import { IndicatorEngine } from './IndicatorEngine.js';
 import { useMarketStore, type ChartAggregationType } from '../store/marketStore.js';
+import { GuardianIndicator, type GuardianState } from '../indicators/custom/guardian.js';
 
 interface Props {
   symbol: string;
@@ -253,7 +257,15 @@ export const ChartCanvas: React.FC<Props> = ({
   const indicatorEngineRef = useRef<IndicatorEngine | null>(null);
   const isMountedRef = useRef<boolean>(false);
 
-  const { activeDrawingTool, magnetMode, chartAggregation, tickSize } = useMarketStore();
+  const guardianRef = useRef<GuardianIndicator>(new GuardianIndicator());
+  const guardianMarkersRef = useRef<ISeriesMarkersPluginApi<any> | null>(null);
+  const guardianPriceLinesRef = useRef<IPriceLine[]>([]);
+  const [guardianState, setGuardianState] = useState<GuardianState | null>(null);
+
+  const { activeDrawingTool, magnetMode, chartAggregation, tickSize, activeIndicators } = useMarketStore();
+  const guardianActive = activeIndicators.includes('GUARDIAN');
+  const guardianActiveRef = useRef<boolean>(guardianActive);
+  guardianActiveRef.current = guardianActive;
 
   const chartAggregationRef = useRef<ChartAggregationType>(chartAggregation);
   const tickSizeRef = useRef<number>(tickSize);
@@ -262,6 +274,147 @@ export const ChartCanvas: React.FC<Props> = ({
 
   const prevAggRef = useRef<ChartAggregationType>(chartAggregation);
   const prevTickRef = useRef<number>(tickSize);
+
+  const clearGuardianOverlay = useCallback((series: ISeriesApi<any> | null) => {
+    if (guardianMarkersRef.current) {
+      try {
+        guardianMarkersRef.current.detach();
+      } catch {
+        // ignore
+      }
+      guardianMarkersRef.current = null;
+    }
+    if (series && guardianPriceLinesRef.current.length > 0) {
+      for (const line of guardianPriceLinesRef.current) {
+        try {
+          series.removePriceLine(line);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    guardianPriceLinesRef.current = [];
+  }, []);
+
+  const syncGuardianOverlay = useCallback(
+    (series: ISeriesApi<any> | null) => {
+      clearGuardianOverlay(series);
+      if (!guardianActiveRef.current || !series || barsRef.current.length === 0) {
+        setGuardianState(null);
+        return;
+      }
+
+      const state = guardianRef.current.calculate(barsRef.current);
+      setGuardianState(state);
+
+      // Build sorted LWC v5 markers for Structure Breaks + Swing Points + EQH/EQL
+      const markers: Array<{
+        time: any;
+        position: 'aboveBar' | 'belowBar' | 'inBar';
+        color: string;
+        shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
+        text: string;
+      }> = [];
+
+      for (const sb of state.structureBreaks.slice(-30)) {
+        markers.push({
+          time: sb.breakTime as any,
+          position: sb.bull ? 'belowBar' : 'aboveBar',
+          color: sb.bull ? '#089981' : '#f23645',
+          shape: sb.bull ? 'arrowUp' : 'arrowDown',
+          text: `${sb.kind === 'swing' ? 'S-' : ''}${sb.label}`,
+        });
+      }
+
+      for (const lbl of state.swingLabels.slice(-20)) {
+        markers.push({
+          time: lbl.time as any,
+          position: lbl.bull ? 'belowBar' : 'aboveBar',
+          color: lbl.bull ? '#26a69a' : '#ef5350',
+          shape: 'circle',
+          text: lbl.text,
+        });
+      }
+
+      for (const eq of state.eqLevels.slice(0, 10)) {
+        markers.push({
+          time: eq.endTime as any,
+          position: eq.kind === 'EQL' ? 'belowBar' : 'aboveBar',
+          color: eq.kind === 'EQL' ? '#089981' : '#f23645',
+          shape: 'square',
+          text: eq.kind,
+        });
+      }
+
+      markers.sort((a, b) => Number(a.time) - Number(b.time));
+      if (markers.length > 0) {
+        try {
+          guardianMarkersRef.current = createSeriesMarkers(series, markers);
+        } catch {
+          // ignore if series does not support markers
+        }
+      }
+
+      // Price lines: Strong/Weak High/Low, Equilibrium, Top Volumetric OBs
+      const lines: IPriceLine[] = [];
+      if (state.strongWeak) {
+        lines.push(
+          series.createPriceLine({
+            price: state.strongWeak.high,
+            color: '#f23645',
+            lineWidth: 1,
+            lineStyle: 0,
+            axisLabelVisible: true,
+            title: `${state.strongWeak.highLabel} (${state.strongWeak.highPct}%)`,
+          }),
+          series.createPriceLine({
+            price: state.strongWeak.equilibrium,
+            color: '#787b86',
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: 'Equilibrium',
+          }),
+          series.createPriceLine({
+            price: state.strongWeak.low,
+            color: '#089981',
+            lineWidth: 1,
+            lineStyle: 0,
+            axisLabelVisible: true,
+            title: `${state.strongWeak.lowLabel} (${state.strongWeak.lowPct}%)`,
+          })
+        );
+      }
+
+      for (const ob of state.bullOrderBlocks.slice(0, 2)) {
+        lines.push(
+          series.createPriceLine({
+            price: ob.mid,
+            color: '#089981',
+            lineWidth: 1,
+            lineStyle: 3,
+            axisLabelVisible: false,
+            title: `Bull OB (${ob.volumePct}%)`,
+          })
+        );
+      }
+      for (const ob of state.bearOrderBlocks.slice(0, 2)) {
+        lines.push(
+          series.createPriceLine({
+            price: ob.mid,
+            color: '#f23645',
+            lineWidth: 1,
+            lineStyle: 3,
+            axisLabelVisible: false,
+            title: `Bear OB (${ob.volumePct}%)`,
+          })
+        );
+      }
+
+      guardianPriceLinesRef.current = lines;
+    },
+    [clearGuardianOverlay]
+  );
 
   // Zero-react-render DOM legend updater
   const updateLegend = useCallback(
@@ -405,6 +558,7 @@ export const ChartCanvas: React.FC<Props> = ({
           );
           updateLegend(bars[bars.length - 1]);
           chart.timeScale().scrollToRealTime();
+          syncGuardianOverlay(currentSeries);
         }
       } catch (err) {
         console.warn('[ChartCanvas] History fetch error:', err);
@@ -479,6 +633,9 @@ export const ChartCanvas: React.FC<Props> = ({
         }
         updateLegend(bar);
         indEngine.onBarUpdate(bar);
+        if (guardianActiveRef.current) {
+          syncGuardianOverlay(currentSeries);
+        }
         onBarUpdate?.(bar);
       } catch (err) {
         console.warn('[ChartCanvas] Bar update warning:', err);
@@ -500,6 +657,7 @@ export const ChartCanvas: React.FC<Props> = ({
     return () => {
       cancelled = true;
       isMountedRef.current = false;
+      clearGuardianOverlay(mainSeriesRef.current);
       window.removeEventListener('tv:auto-scale', handleAutoScale);
       drawingCtrl.saveToServer();
       drawingCtrl.destroy();
@@ -542,7 +700,13 @@ export const ChartCanvas: React.FC<Props> = ({
     if (drawingControllerRef.current) {
       drawingControllerRef.current.setSeries(newSeries);
     }
-  }, [chartAggregation, tickSize]);
+    syncGuardianOverlay(newSeries);
+  }, [chartAggregation, tickSize, syncGuardianOverlay]);
+
+  // Re-sync Guardian overlay whenever GUARDIAN is toggled in Indicators modal
+  useEffect(() => {
+    syncGuardianOverlay(mainSeriesRef.current);
+  }, [guardianActive, syncGuardianOverlay]);
 
   // Sync active tool changes to drawing controller
   useEffect(() => {
@@ -566,6 +730,82 @@ export const ChartCanvas: React.FC<Props> = ({
       >
         LIVE
       </div>
+
+      {/* Guardian (Guardeer) SMC + Impulse HUD */}
+      {guardianActive && guardianState && (
+        <div className="absolute top-9 right-3 z-10 bg-[#131722e6] border border-[#2a2e39] rounded-md px-2.5 py-2 text-[10px] font-mono text-[#d1d4dc] shadow-xl pointer-events-none min-w-[205px] space-y-1">
+          <div className="flex items-center justify-between border-b border-[#2a2e39] pb-1">
+            <span className="font-extrabold text-[#00e5ff] tracking-wide">GUARDIAN SMC</span>
+            <span
+              className={`font-bold ${
+                guardianState.impulseTrend.signal === 'BULLISH'
+                  ? 'text-[#089981]'
+                  : guardianState.impulseTrend.signal === 'BEARISH'
+                    ? 'text-[#f23645]'
+                    : 'text-[#787b86]'
+              }`}
+            >
+              {guardianState.impulseTrend.signal === 'BULLISH'
+                ? '🟢 BULL'
+                : guardianState.impulseTrend.signal === 'BEARISH'
+                  ? '🔴 BEAR'
+                  : '⚫ NEUT'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#787b86]">Internal:</span>
+            <span
+              className={
+                guardianState.internalTrend > 0
+                  ? 'text-[#089981] font-bold'
+                  : guardianState.internalTrend < 0
+                    ? 'text-[#f23645] font-bold'
+                    : 'text-[#787b86]'
+              }
+            >
+              {guardianState.internalTrend > 0 ? 'BULLISH' : guardianState.internalTrend < 0 ? 'BEARISH' : '—'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#787b86]">Swing:</span>
+            <span
+              className={
+                guardianState.swingTrend > 0
+                  ? 'text-[#089981] font-bold'
+                  : guardianState.swingTrend < 0
+                    ? 'text-[#f23645] font-bold'
+                    : 'text-[#787b86]'
+              }
+            >
+              {guardianState.swingTrend > 0 ? 'BULLISH' : guardianState.swingTrend < 0 ? 'BEARISH' : '—'}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#787b86]">Order Blocks:</span>
+            <span>
+              <span className="text-[#089981] font-bold">{guardianState.bullOrderBlocks.length}B</span>
+              {' / '}
+              <span className="text-[#f23645] font-bold">{guardianState.bearOrderBlocks.length}S</span>
+              {' · '}
+              <span className="text-[#38bdf8]">{guardianState.fvgs.length} FVG</span>
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#787b86]">Pattern:</span>
+            <span
+              className={
+                guardianState.detectedPattern.bull === true
+                  ? 'text-[#089981] font-bold'
+                  : guardianState.detectedPattern.bull === false
+                    ? 'text-[#f23645] font-bold'
+                    : 'text-[#787b86]'
+              }
+            >
+              {guardianState.detectedPattern.found}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div ref={containerRef} className="w-full h-full" />
     </div>
